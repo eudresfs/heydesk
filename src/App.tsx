@@ -17,7 +17,7 @@ import { useMascotTouch } from "./modules/context/useMascotTouch";
 import { defaultReminders, dueReminders, useNotes } from "./modules/context/useNotes";
 import { waterCopy, waterPlan } from "./modules/context/waterPlan";
 import { useAsk } from "./modules/context/useAsk";
-import { useSports, csSide } from "./modules/sports/useSports";
+import { useSports, csMapScore, csSide } from "./modules/sports/useSports";
 import { useCalendars } from "./modules/context/useCalendars";
 import { fileSize, useShelf } from "./modules/context/useShelf";
 import { clock as recClock, recordedMs, useRecorder } from "./modules/prompter/useRecorder";
@@ -406,7 +406,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {!activity && !waterShow && liveGame && <span className="compact-score" title={`${liveGame.home.name} × ${liveGame.away.name} · ${liveGame.leagueName}`}>
         <span className="score-logo">{liveGame.home.logo ? <img src={liveGame.home.logo} alt="" /> : liveGame.home.name.slice(0, 1)}</span>
         <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.home)}>{teamTag(liveGame.home)}</b>
-        <span className="score-pill"><span>{liveGame.home.score ?? 0}</span><i>:</i><span>{liveGame.away.score ?? 0}</span></span>
+        <span className="score-pill">{(rounds => rounds ? <><span>{rounds.home}</span><i>:</i><span>{rounds.away}</span></> : <><span>{liveGame.home.score ?? 0}</span><i>:</i><span>{liveGame.away.score ?? 0}</span></>)(csMapScore(liveGame, sports.csLive))}</span>
         <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.away)}>{teamTag(liveGame.away)}</b>
         <span className="score-logo">{liveGame.away.logo ? <img src={liveGame.away.logo} alt="" /> : liveGame.away.name.slice(0, 1)}</span>
       </span>}
@@ -414,7 +414,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
       {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.label} — ${trackShow.value}`}><b>{trackShow.label}</b><span>{trackShow.value}</span></span>}
       {waterShow ? <span className="compact-side compact-right compact-water"><span className="water-pill">abrir</span></span>
-        : !activity && liveGame ? <span className="compact-side compact-right compact-live"><span className="live-map">{liveGame.clock ?? liveGame.detail}</span></span>
+        : !activity && liveGame ? <span className="compact-side compact-right compact-live"><span className="live-map">{(rounds => rounds ? <>{rounds.map}{liveGame.maps && liveGame.maps.length > 1 && <small>{liveGame.home.score ?? 0}–{liveGame.away.score ?? 0}</small>}</> : liveGame.clock ?? liveGame.detail)(csMapScore(liveGame, sports.csLive))}</span></span>
         : trackShow || singing ? <span className="compact-side compact-right" />
         : activity ? <span className="compact-side compact-right compact-activity" key={`value-${activity.id}`} data-tone={activity.tone}>{activity.meter != null && <span className="compact-meter"><i style={{ transform: `scaleX(${activity.meter / 100})` }} /></span>}<span className="compact-activity-value">{activity.kind === "message" || activity.kind === "agenda" ? <><b>{activity.label}</b> {activity.value}</> : activity.value}</span></span>
         : <span className="compact-side compact-right">

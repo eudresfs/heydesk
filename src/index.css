@@ -998,12 +998,14 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 @media (prefers-reduced-motion: reduce) { .water-thanks .water-card-face, .water-thanks .mascot { transition: none; } .water-thanks[data-step="2"] .mascot svg { animation: none; } }
 
 /* CS2 ao vivo (HLTV): numa linha só — lado de cada time nas pontas, round e últimos 5 rounds no meio. */
-.cs-live { display: flex; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
+.cs-live { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
+.cs-edge { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.cs-edge-end { justify-content: flex-end; }
 .cs-side { flex: none; padding: 1px 6px; border-radius: 6px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
 .cs-side[data-side=CT] { background: color-mix(in oklab, #5d9cec 22%, transparent); color: #8fbaf2; }
 .cs-side[data-side=TR] { background: color-mix(in oklab, #e0a33b 22%, transparent); color: #edbe6d; }
 .cs-head { flex: none; font-size: var(--fs-micro); color: var(--text-faint); font-variant-numeric: tabular-nums; }
-.cs-last { display: flex; flex: 1; justify-content: center; gap: 3px; min-width: 0; }
+.cs-last { display: flex; justify-content: center; gap: 3px; }
 .cs-round { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; }
 .cs-round svg { width: 11px; height: 11px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .cs-round[data-side=CT] { background: color-mix(in oklab, #5d9cec 20%, transparent); color: #8fbaf2; }
@@ -1042,3 +1044,4 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 /* Respiro entre o rosto e o texto (o rosto do alívio é maior). */
 .water-card { column-gap: 16px; }
 .water-thanks { grid-template-columns: 60px minmax(0, 1fr); column-gap: 18px; padding-left: 16px; }
+.live-map small { margin-left: 5px; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }

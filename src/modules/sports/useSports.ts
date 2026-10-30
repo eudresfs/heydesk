@@ -20,6 +20,19 @@ export function csSide(live: CsLive | null | undefined, team: { name: string; sh
   if (same(live.tTeam, team.name) || same(live.tTeam, team.short)) return "TR";
   return undefined;
 }
+/** CS2 ao vivo: placar de rounds do mapa atual (mandante–visitante) e o nome do mapa.
+ * Prefere a página da partida (HLTV, com nome do mapa); sem ela, o mapa ao vivo da lista. */
+export function csMapScore(game: SportGame, live: CsLive | null | undefined): { home: number; away: number; map: string } | null {
+  if (game.state !== "in") return null;
+  const index = game.maps?.findIndex(map => map.result === "live") ?? -1;
+  if (live && live.gameId === game.id) {
+    const homeCt = csSide(live, game.home) === "CT";
+    return { home: homeCt ? live.ctScore : live.tScore, away: homeCt ? live.tScore : live.ctScore, map: live.map || (index >= 0 ? `Mapa ${index + 1}` : "") };
+  }
+  const map = index >= 0 ? game.maps![index] : null;
+  if (!map || map.homeRounds == null || map.awayRounds == null) return null;
+  return { home: map.homeRounds, away: map.awayRounds, map: map.name ?? `Mapa ${index + 1}` };
+}
 export interface CsLive { gameId: string; map: string; round: number; ctTeam: string; tTeam: string; ctScore: number; tScore: number; phase: string; history: CsRound[] }
 
 /** Próximo aviso antes do jogo: 30 e 5 minutos antes do início. */

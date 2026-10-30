@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
-import { csSide, kickoffLabel, type CsLive, type SportGame, type SportsControl, type TeamOption } from "./useSports";
+import { csMapScore, csSide, kickoffLabel, type CsLive, type SportGame, type SportsControl, type TeamOption } from "./useSports";
 import { Digits } from "../ui/Digits";
 
 function Logo({ src, size = 28, name }: { src: string | null; size?: number; name: string }) {
@@ -40,12 +40,11 @@ function CsRounds({ game, live }: { game: SportGame; live: CsLive }) {
   const side = (home: boolean) => (home === homeCt ? "CT" : "TR");
   const last = live.history.slice(-5);
   return <div className="cs-live" aria-label="Rounds ao vivo">
-    <span className="cs-side" data-side={side(true)}>{side(true)}</span>
-    <span className="cs-head">R{live.round}</span>
+    <span className="cs-edge"><span className="cs-side" data-side={side(true)}>{side(true)}</span><span className="cs-head">R{live.round}</span></span>
     <span className="cs-last">{last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.team || (round.winner === "CT" ? live.ctTeam : live.tTeam);
       return <span key={round.round} className="cs-round" data-side={round.winner} title={`R${round.round}: ${team} (${round.winner === "CT" ? "CT" : "TR"}) · ${label}`} aria-label={`Round ${round.round}: ${team}, ${label}`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg></span>; })}
       {!last.length && <span className="cs-wait">aguardando rounds</span>}</span>
-    <span className="cs-side" data-side={side(false)}>{side(false)}</span>
+    <span className="cs-edge cs-edge-end"><span className="cs-side" data-side={side(false)}>{side(false)}</span></span>
   </div>;
 }
 
@@ -60,13 +59,16 @@ function liveScore(game: SportGame, map: { name: string | null }, live?: CsLive 
 const csNote: Partial<Record<string, string>> = { searching: "Procurando a partida no HLTV…", missing: "Rounds ao vivo indisponíveis: esta partida não está no HLTV.", blocked: "HLTV pediu verificação; rounds ao vivo pausados por 30 min." };
 
 function Scoreboard({ game, onPin, live, note }: { game: SportGame; onPin(id: string): void; live?: CsLive | null; note?: string }) {
+  const rounds = csMapScore(game, live);
   return <div className="scoreboard hd-enter">
     <div className="scoreboard-head"><span>{game.leagueName}</span><span className="scoreboard-actions"><PinButton game={game} onToggle={onPin} />{status(game)}</span></div>
     <div className="scoreboard-row">
       <div className="score-team"><Logo src={game.home.logo} size={34} name={game.home.name} /><span className="score-team-name"><strong title={game.home.name}>{game.home.name}</strong>{game.home.short !== game.home.name && <small>{game.home.short}</small>}</span></div>
       <div className="score-center">
-        <div className="score-numbers">{game.state === "pre" ? <span className="score-vs">×</span> : <><Digits value={game.home.score ?? "0"} /><span className="score-dash">–</span><Digits value={game.away.score ?? "0"} /></>}</div>
-        {game.maps && game.maps.length > 1 && <span className="score-series">MD{game.maps.length}</span>}
+        {/* CS2 ao vivo: o placar grande é o de rounds do mapa; a série vai para a linha de baixo. */}
+        <div className="score-numbers">{game.state === "pre" ? <span className="score-vs">×</span> : rounds ? <><Digits value={String(rounds.home)} /><span className="score-dash">–</span><Digits value={String(rounds.away)} /></> : <><Digits value={game.home.score ?? "0"} /><span className="score-dash">–</span><Digits value={game.away.score ?? "0"} /></>}</div>
+        {rounds ? <span className="score-series">{rounds.map}{game.maps && game.maps.length > 1 ? ` · série ${game.home.score ?? 0}–${game.away.score ?? 0} · MD${game.maps.length}` : ""}</span>
+          : game.maps && game.maps.length > 1 && <span className="score-series">MD{game.maps.length}</span>}
       </div>
       <div className="score-team away"><span className="score-team-name"><strong title={game.away.name}>{game.away.name}</strong>{game.away.short !== game.away.name && <small>{game.away.short}</small>}</span><Logo src={game.away.logo} size={34} name={game.away.name} /></div>
     </div>
