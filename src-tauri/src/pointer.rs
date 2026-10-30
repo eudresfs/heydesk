@@ -30,6 +30,8 @@ pub struct SharedShape(pub Arc<Mutex<Option<HitShape>>>);
 
 impl SharedShape {
     pub fn set(&self, shape: HitShape) { *self.0.lock().unwrap_or_else(|poison| poison.into_inner()) = Some(shape); }
+    /// Forma atual da ilha (o PiP grudado usa a altura para ficar logo abaixo).
+    pub fn current(&self) -> HitShape { self.get() }
     fn get(&self) -> HitShape { self.0.lock().unwrap_or_else(|poison| poison.into_inner()).unwrap_or(HitShape::COMPACT) }
 }
 

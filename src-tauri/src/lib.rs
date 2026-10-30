@@ -17,6 +17,7 @@ mod notes;
 mod pointer;
 mod updater;
 mod hltv;
+mod pip;
 
 use settings::{AppSettings, SettingsStore};
 use tauri::{Emitter, Manager, State, WebviewWindow};
@@ -117,6 +118,7 @@ async fn stream_pip(app: tauri::AppHandle, url: Option<String>) -> Result<(), St
         builder = builder.position((size.width as f64 / scale - width) / 2.0, 44.0);
     }
     builder.build().map_err(|error| error.to_string())?;
+    app.state::<pip::Pip>().opened(&app);
     Ok(())
 }
 
@@ -347,8 +349,10 @@ fn refresh_codex_usage(monitor: State<'_, codex_usage::CodexMonitor>) -> codex_u
 }
 
 #[tauri::command]
-fn set_hit_shape(shape: pointer::HitShape, state: State<'_, pointer::SharedShape>) -> Result<(), String> {
+fn set_hit_shape(app: tauri::AppHandle, shape: pointer::HitShape, state: State<'_, pointer::SharedShape>) -> Result<(), String> {
     state.set(shape.validated()?);
+    // Transmissão grudada no notch desce/sobe junto com a ilha.
+    app.state::<pip::Pip>().follow(&app);
     Ok(())
 }
 
@@ -450,6 +454,7 @@ pub fn run() {
             app.manage(system_events::Notifications::default());
             system_events::start(app.handle().clone());
             app.manage(hltv::Hltv::default());
+            app.manage(pip::Pip::default());
             hltv::watch(app.handle().clone());
             app.manage(sports::Sports::start(app.path().app_config_dir()?.join("sports.json")));
             app.manage(std::sync::Arc::new(recorder::Recorder::default()));
@@ -473,6 +478,14 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Bolha fechada pelo próprio "×": o botão de câmera do notch desliga junto.
             if window.label() == "camera" && matches!(event, tauri::WindowEvent::Destroyed) { let _ = window.app_handle().emit("camera:closed", ()); }
+            // PiP arrastado: perto da ilha gruda, longe solta; mudou de tamanho: recentraliza.
+            if window.label() == pip::LABEL {
+                match event {
+                    tauri::WindowEvent::Moved(_) => window.app_handle().state::<pip::Pip>().moved(window.app_handle()),
+                    tauri::WindowEvent::Resized(_) => window.app_handle().state::<pip::Pip>().follow(window.app_handle()),
+                    _ => {}
+                }
+            }
             // Só a ilha recolhe em vez de fechar; bolha de câmera e realce fecham de verdade.
             if window.label() != "main" { return; }
             if let tauri::WindowEvent::ScaleFactorChanged { .. } = event {
