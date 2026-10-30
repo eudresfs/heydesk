@@ -142,6 +142,7 @@ pub fn windows() -> Vec<String> {
 
 pub fn capabilities() -> Capabilities {
     let Some(ffmpeg) = find_ffmpeg() else { return Capabilities { windows: windows(), ..Default::default() } };
+    warm_up();
     Capabilities { encoder: Some(encoder(&ffmpeg)), microphones: microphones(&ffmpeg), windows: windows(), ffmpeg: Some(ffmpeg.to_string_lossy().to_string()) }
 }
 
@@ -181,22 +182,40 @@ fn window_handle(title: &str) -> Option<u64> {
 
 /// A captura pela GPU funciona nesta máquina? (driver básico, VM ou área de trabalho
 /// remota podem falhar). Tira um quadro de teste; o sucesso fica guardado, a falha
-/// é testada de novo na próxima gravação.
+/// vale por 30 s. A primeira captura "fria" pode levar vários segundos (notebook com
+/// duas GPUs), por isso o prazo é longo e o teste começa cedo (`warm_up`).
 fn gfxcapture_works(ffmpeg: &Path) -> bool {
     static WORKS: AtomicBool = AtomicBool::new(false);
+    static PROBING: Mutex<Option<Instant>> = Mutex::new(None);
     if WORKS.load(Ordering::Relaxed) { return true; }
+    // Um teste por vez: quem chega durante o teste espera o resultado.
+    let Ok(mut failed_at) = PROBING.lock() else { return false };
+    if WORKS.load(Ordering::Relaxed) { return true; }
+    if failed_at.is_some_and(|at| at.elapsed() < Duration::from_secs(30)) { return false; }
+    let ok = probe_gfxcapture(ffmpeg);
+    if ok { WORKS.store(true, Ordering::Relaxed); } else { *failed_at = Some(Instant::now()); }
+    ok
+}
+
+/// Testa a captura pela GPU em segundo plano (ao abrir as opções ou começar a contagem),
+/// para a gravação não cair no gdigrab por demora da primeira captura.
+pub fn warm_up() {
+    let Some(ffmpeg) = find_ffmpeg() else { return };
+    if !has_gfxcapture(&ffmpeg) { return; }
+    let _ = std::thread::Builder::new().name("heydesk-gfx-probe".into()).spawn(move || { gfxcapture_works(&ffmpeg); });
+}
+
+fn probe_gfxcapture(ffmpeg: &Path) -> bool {
     let Ok(mut probe) = command(ffmpeg).args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "gfxcapture=monitor_idx=0,hwdownload,format=bgra", "-frames:v", "1", "-f", "null", "-"])
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn() else { return false };
-    let deadline = Instant::now() + Duration::from_millis(2500);
-    let ok = loop {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
         match probe.try_wait() {
             Ok(Some(status)) => break status.success(),
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(40)),
             _ => { let _ = probe.kill(); let _ = probe.wait(); break false; }
         }
-    };
-    if ok { WORKS.store(true, Ordering::Relaxed); }
-    ok
+    }
 }
 
 fn capture_for(ffmpeg: &Path, options: &Options) -> Capture {
@@ -219,8 +238,9 @@ pub(crate) fn segment_args(options: &Options, capture: Capture, encoder: &str, p
     let window = options.window.as_deref().filter(|title| options.source == "window" && !title.is_empty());
     match (capture, window) {
         (Capture::Wgc(hwnd), _) => {
+            // width/height=-2: o próprio gfxcapture entrega largura e altura pares.
             let source = hwnd.map(|hwnd| format!("hwnd={hwnd}")).unwrap_or_else(|| "monitor_idx=0".into());
-            push(&["-thread_queue_size", "512", "-f", "lavfi", "-i", &format!("gfxcapture={source}:max_framerate={fps},hwdownload,format=bgra,fps={fps}")]);
+            push(&["-thread_queue_size", "512", "-f", "lavfi", "-i", &format!("gfxcapture={source}:max_framerate={fps}:width=-2:height=-2,hwdownload,format=bgra,fps={fps}")]);
         }
         (Capture::Gdi, Some(title)) => push(&["-thread_queue_size", "512", "-f", "gdigrab", "-framerate", &fps, "-draw_mouse", "1", "-i", &format!("title={title}")]),
         (Capture::Gdi, None) => { let (width, height) = primary_size(); push(&["-thread_queue_size", "512", "-f", "gdigrab", "-framerate", &fps, "-draw_mouse", "1", "-offset_x", "0", "-offset_y", "0", "-video_size", &format!("{width}x{height}"), "-i", "desktop"]) }
@@ -234,8 +254,11 @@ pub(crate) fn segment_args(options: &Options, capture: Capture, encoder: &str, p
         push(&["-thread_queue_size", "1024", "-f", if float { "f32le" } else { "s16le" }, "-ar", &rate.to_string(), "-ac", &channels.to_string(), "-i", pipe]);
         audio += 1;
     }
-    // Largura e altura pares (exigência do H.264).
-    push(&["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=nv12"]);
+    // NVENC e QSV recebem BGRA e convertem na placa; converter para NV12 na CPU travava
+    // o vídeo (~4 fps em 1080p num notebook modesto). Nos demais: largura e altura pares
+    // (exigência do H.264) e NV12 aqui.
+    let gpu_converts = matches!(capture, Capture::Wgc(_)) && matches!(encoder, "h264_nvenc" | "h264_qsv");
+    if !gpu_converts { push(&["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=nv12"]); }
     match audio {
         2 => push(&["-filter_complex", "[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[a]", "-map", "0:v", "-map", "[a]"]),
         1 => push(&["-map", "0:v", "-map", "1:a"]),
@@ -483,11 +506,12 @@ mod tests {
         assert!(joined.contains("-f gdigrab -framerate 30 -draw_mouse 1 -i title=Bloco de Notas"));
         assert!(joined.contains("-map 0:v -c:v libx264"));
         let joined = segment_args(&options, Capture::Wgc(None), "h264_qsv", None, Path::new("o.mkv")).join(" ");
-        assert!(joined.contains("-f lavfi -i gfxcapture=monitor_idx=0:max_framerate=30,hwdownload,format=bgra,fps=30"));
+        assert!(joined.contains("-f lavfi -i gfxcapture=monitor_idx=0:max_framerate=30:width=-2:height=-2,hwdownload,format=bgra,fps=30"));
+        assert!(!joined.contains("format=nv12"), "QSV converte BGRA na placa");
         let joined = segment_args(&window, Capture::Wgc(Some(42)), "h264_qsv", None, Path::new("o.mkv")).join(" ");
-        assert!(joined.contains("-i gfxcapture=hwnd=42:max_framerate=60,"));
+        assert!(joined.contains("-i gfxcapture=hwnd=42:max_framerate=60:"));
         assert!(joined.contains("-b:v 12M"));
         let joined = segment_args(&options, Capture::Wgc(None), "libx264", None, Path::new("o.mkv")).join(" ");
-        assert!(joined.contains("max_framerate=30,") && joined.contains("-preset veryfast"), "sem GPU: 30 fps");
+        assert!(joined.contains("max_framerate=30:") && joined.contains("format=nv12") && joined.contains("-preset veryfast"), "sem GPU: 30 fps e NV12 na CPU");
     }
 }
