@@ -24,6 +24,7 @@ import { clock as recClock, recordedMs, useRecorder } from "./modules/prompter/u
 import { PrompterGrip } from "./modules/prompter/PrompterPage";
 import { Tooltips } from "./components/Tooltips";
 import { useMascotGaze } from "./modules/context/useMascotGaze";
+import { THANKS_MS, WaterThanks } from "./modules/context/WaterThanks";
 import { glowPresets } from "./modules/context/ContextPages";
 import { defaultMascot, defaultSounds } from "./lib/shellBridge";
 import { playSound, soundCategory, type SoundKind } from "./modules/sound/sounds";
@@ -222,6 +223,10 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   // Jogo ao vivo de time seguido fica no compacto enquanto durar (atividades passam por cima).
   const liveGame = !island.hidden ? sports.snapshot?.games.find(game => game.state === "in" && game.followed) ?? null : null;
   const waterShow = waterPending && !activity && !island.hidden;
+  // Bebeu depois de um lembrete: o mascote se acalma e agradece por alguns segundos.
+  const [waterThanks, setWaterThanks] = useState<{ level: number; key: number } | null>(null);
+  useEffect(() => { if (!waterThanks) return; const timer = window.setTimeout(() => setWaterThanks(null), THANKS_MS); return () => window.clearTimeout(timer); }, [waterThanks]);
+  const thanksShow = Boolean(waterThanks) && !island.hidden && !island.expanded;
   const waterPulse = waterShow ? Math.floor(waterTick / 300_000) : 0;
   useEffect(() => { if (waterShow) play("reminder"); }, [waterShow, waterPulse]); // eslint-disable-line react-hooks/exhaustive-deps
   const openedOnce = useRef(false);
@@ -232,7 +237,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const recNow = useNow(recorder.busy, 500);
   const recShow = recorder.busy && !toast;
   const countShow = recorder.countdown != null;
-  useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast ? { width: 372, height: toastHeight } : waterShow ? { width: 404, height: 104 } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, recShow, countShow]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast ? { width: 372, height: toastHeight } : waterShow || thanksShow ? { width: 404, height: 104 } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, thanksShow, recShow, countShow]); // eslint-disable-line react-hooks/exhaustive-deps
   // Clicar no notch com a água pendente abre direto na página Água.
   useEffect(() => { if (island.expanded && waterPending && page !== "water") selectPage("water", false, 1); }, [island.expanded]); // eslint-disable-line react-hooks/exhaustive-deps
   // O mascote anuncia: primeiro olha para o ícone que entra, depois reage ao evento.
@@ -419,12 +424,13 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {island.error && <span className="sr-only" role="alert">{island.error}</span>}
     </button>
     {/* Lembrete de água com botões (fora do botão do compacto: botão dentro de botão não vale). */}
-    {waterShow && !toast && !countShow && !island.expanded && waterNow?.due && (copy => <div className="water-card" key={`wc-${waterPulse}-${waterNow.due}-${waterLevel}`} role="alertdialog" aria-label={copy.title} data-level={waterLevel} data-kind={waterNow.due}>
+    {thanksShow && waterThanks && !toast && !countShow && <WaterThanks key={waterThanks.key} level={waterThanks.level} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} reducedMotion={reducedMotion} />}
+    {!thanksShow && waterShow && !toast && !countShow && !island.expanded && waterNow?.due && (copy => <div className="water-card" key={`wc-${waterPulse}-${waterNow.due}-${waterLevel}`} role="alertdialog" aria-label={copy.title} data-level={waterLevel} data-kind={waterNow.due}>
       <span className="water-card-face"><Mascot expression={waterMood} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={waterAngry ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
       <span className="toast-text"><b>{copy.title}</b><span>{copy.sub}</span></span>
       <span className="water-card-actions">
         <button type="button" className="water-no" onClick={notes.refuseWater}>{copy.no}</button>
-        <button type="button" className="water-yes" onClick={() => waterNow.due === "refill" ? notes.refillWater() : notes.drink()}>{copy.yes}</button>
+        <button type="button" className="water-yes" onClick={() => { if (waterNow.due === "refill") { notes.refillWater(); return; } notes.drink(); setWaterThanks({ level: waterLevel, key: Date.now() }); }}>{copy.yes}</button>
       </span>
     </div>)(waterCopy(waterNow, notes.water, waterTick))}
   <Tooltips /></main>;

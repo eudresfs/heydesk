@@ -980,3 +980,19 @@ html[data-view=settings], html[data-view=settings] body { background: #0e0e10 !i
 .set-field:first-child { width: 160px; flex: none; }
 html[data-view=settings] select, html[data-view=settings] input { color-scheme: dark; }
 @media (prefers-reduced-motion: reduce) { .set-page { transition: none; } }
+
+/* Alívio depois do gole: o rosto sai do vermelho, o mascote pula e solta corações. */
+.water-thanks { grid-template-rows: 1fr; }
+.water-thanks .water-card-face { position: relative; transition: background 600ms var(--ease-out), box-shadow 600ms var(--ease-out); }
+.water-thanks[data-step="0"] .water-card-face { background: color-mix(in oklab, var(--rec) 22%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--rec) 45%, transparent); }
+.water-thanks[data-step="2"] .water-card-face { background: color-mix(in oklab, var(--info) 18%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--info) 40%, transparent); }
+.water-thanks .mascot { transition: color 600ms var(--ease-out); }
+.water-thanks[data-step="2"] .mascot svg { animation: hop 420ms cubic-bezier(.23,1,.32,1) both; }
+.water-thanks .toast-text b { color: var(--info); }
+.water-hearts { position: absolute; inset: 0; pointer-events: none; }
+.water-hearts i { position: absolute; left: 50%; bottom: 40%; font-size: 12px; font-style: normal; opacity: 0; animation: water-heart 1400ms var(--ease-out) forwards; }
+.water-hearts i:nth-child(1) { margin-left: -16px; animation-delay: 1000ms; }
+.water-hearts i:nth-child(2) { margin-left: -4px; animation-delay: 1150ms; }
+.water-hearts i:nth-child(3) { margin-left: 8px; animation-delay: 1300ms; }
+@keyframes water-heart { 0% { opacity: 0; translate: 0 0; scale: .6; } 25% { opacity: 1; scale: 1; } 100% { opacity: 0; translate: 0 -30px; scale: .9; } }
+@media (prefers-reduced-motion: reduce) { .water-thanks .water-card-face, .water-thanks .mascot { transition: none; } .water-thanks[data-step="2"] .mascot svg { animation: none; } }

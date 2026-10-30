@@ -920,6 +920,24 @@ test("lembrete de água no compacto tem os dois botões, recusa conta e o mascot
   assert.equal(host.querySelector(".water-card"), null, "some durante a soneca");
 });
 
+test("bebeu com o mascote bravo: ele se acalma, agradece e o cartão some", async () => {
+  const { bridge } = fakeBridge();
+  const skips = [Date.now() - 60_000, Date.now() - 120_000];
+  bridge.loadNotes = async () => ({ note: "", todos: [], water: { ...defaultWater, goalMl: 10000, cupMl: 50, startMin: 0, endMin: 1440, days: [0, 1, 2, 3, 4, 5, 6], skips } });
+  bridge.saveNotes = async notes => notes;
+  await mount(bridge); await advance(40);
+  if (new Date().getHours() === 0 && new Date().getMinutes() < 11) return;
+  const yes = [...host.querySelectorAll<HTMLButtonElement>(".water-card button")].at(-1)!;
+  await act(async () => yes.click()); await advance(10);
+  const thanks = host.querySelector(".water-thanks");
+  assert.ok(thanks, "agradecimento no lugar do lembrete");
+  assert.ok(thanks!.querySelector(".mascot[data-expression=angry]"), "começa ainda bravo");
+  await advance(1100);
+  assert.ok(host.querySelector(".water-thanks .mascot[data-expression=happy]"), "termina feliz");
+  await advance(2500);
+  assert.equal(host.querySelector(".water-thanks"), null);
+});
+
 test("Água soma o dia contra a meta, registra o copo e desfaz", async () => {
   const { bridge } = fakeBridge(); const saves: { water?: { log: { ml: number }[] } }[] = [];
   bridge.loadNotes = async () => ({ note: "", todos: [], water: { goalMl: 2000, cupMl: 250, reminders: false, intervalMin: 60, log: [{ at: Date.now() - 60_000, ml: 500 }, { at: Date.now() - 3 * 86_400_000, ml: 900 }] } });
