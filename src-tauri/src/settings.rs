@@ -22,6 +22,9 @@ pub struct AppSettings {
     /// Páginas tiradas do ciclo do notch (ids da interface, como "sports").
     #[serde(default)]
     pub hidden_pages: Vec<String>,
+    /// Ordem das páginas no dock e na rolagem (ids da interface); vazia = ordem padrão.
+    #[serde(default)]
+    pub page_order: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -131,14 +134,14 @@ fn decode_settings(bytes: &[u8]) -> Result<AppSettings, String> {
                 .map_err(|error| format!("Não foi possível migrar as configurações: {error}"))?;
             if legacy.schema_version != 1 { return Err("Versão de configurações inválida.".into()); }
             AppSettings { schema_version: 3, appearance: legacy.appearance, motion: legacy.motion,
-                modules: ModuleSettings::default(), weather_location: None, mascot: MascotSettings::default(), sounds: SoundSettings::default(), hidden_pages: Vec::new() }
+                modules: ModuleSettings::default(), weather_location: None, mascot: MascotSettings::default(), sounds: SoundSettings::default(), hidden_pages: Vec::new(), page_order: Vec::new() }
         }
         2 => {
             let legacy: LegacySettingsV2 = serde_json::from_slice(bytes)
                 .map_err(|error| format!("Não foi possível migrar as configurações: {error}"))?;
             if legacy.schema_version != 2 { return Err("Versão de configurações inválida.".into()); }
             AppSettings { schema_version: 3, appearance: legacy.appearance, motion: legacy.motion,
-                modules: ModuleSettings { codex_usage: legacy.modules.codex_usage, ..Default::default() }, weather_location: None, mascot: MascotSettings::default(), sounds: SoundSettings::default(), hidden_pages: Vec::new() }
+                modules: ModuleSettings { codex_usage: legacy.modules.codex_usage, ..Default::default() }, weather_location: None, mascot: MascotSettings::default(), sounds: SoundSettings::default(), hidden_pages: Vec::new(), page_order: Vec::new() }
         }
         3 => serde_json::from_slice(bytes)
             .map_err(|error| format!("Não foi possível interpretar as configurações: {error}"))?,
@@ -172,7 +175,7 @@ impl Default for AppSettings {
             appearance: AppearanceSettings { opacity: 94.0, accent_color: "#EB0028".into() },
             motion: MotionSettings { reduced_motion: ReducedMotion::System },
             modules: ModuleSettings::default(),
-            weather_location: None, mascot: MascotSettings::default(), sounds: SoundSettings::default(), hidden_pages: Vec::new(),
+            weather_location: None, mascot: MascotSettings::default(), sounds: SoundSettings::default(), hidden_pages: Vec::new(), page_order: Vec::new(),
         }
     }
 }
@@ -196,6 +199,9 @@ impl AppSettings {
         }
         if self.hidden_pages.len() > 20 || self.hidden_pages.iter().any(|page| page.is_empty() || page.len() > 20 || !page.chars().all(|c| c.is_ascii_alphanumeric())) {
             return Err("Páginas ocultas inválidas.".into());
+        }
+        if self.page_order.len() > 20 || self.page_order.iter().any(|page| page.is_empty() || page.len() > 20 || !page.chars().all(|c| c.is_ascii_alphanumeric())) {
+            return Err("Ordem das páginas inválida.".into());
         }
         if self.sounds.volume > 100 || !["soft", "retro", "minimal"].contains(&self.sounds.pack.as_str()) {
             return Err("Opções de som inválidas.".into());
@@ -301,7 +307,8 @@ mod tests {
             "weatherLocation": null,
             "mascot": { "eyeShape": "oval", "eyeColor": "#FFFFFF", "glow": "aurora", "glowColor": "#2D5BFF", "blink": true, "look": true, "reactions": true, "bounce": true, "pace": "calm", "inPanel": true },
             "sounds": { "enabled": true, "volume": 55, "pack": "soft", "notifications": true, "reminders": true, "sports": true, "interactions": false, "respectDnd": true },
-            "hiddenPages": []
+            "hiddenPages": [],
+            "pageOrder": []
         }));
         assert!(settings.validate().is_ok());
         let mut bad = settings.clone();

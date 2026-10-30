@@ -19,6 +19,7 @@ fn main() {
         "recorder_capabilities",
         "camera_bubble",
         "cursor_overlay",
+        "open_settings",
         "countdown_overlay",
         "recorder_state",
         "recorder_start",

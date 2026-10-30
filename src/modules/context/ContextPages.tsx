@@ -533,13 +533,31 @@ function ShelfPage({ shelf }: { shelf?: ShelfControl }) {
 
 /** Páginas que aparecem no ciclo do notch; Início fica sempre. */
 export const optionalPages = ["media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "note", "ask"] as const;
+/** Ordem salva aplicada às páginas: Início sempre primeiro; as que não estão na
+ * ordem salva (páginas novas) entram na posição padrão, depois das ordenadas. */
+export function orderPages<T extends string>(pages: readonly T[], order: readonly string[] = []): T[] {
+  const rank = (page: T, index: number) => page === "home" ? -1 : order.includes(page) ? order.indexOf(page) : order.length + index;
+  return pages.map((page, index) => ({ page, rank: rank(page, index) })).sort((a, b) => a.rank - b.rank).map(item => item.page);
+}
+
 function PagesPrefs({ settings, editable }: { settings: ReturnType<typeof useSettings>; editable: boolean }) {
   const hidden = settings.draft.hiddenPages ?? [];
+  const pages = orderPages(optionalPages, settings.draft.pageOrder);
   const toggle = (page: string) => settings.edit({ ...settings.draft, hiddenPages: hidden.includes(page) ? hidden.filter(item => item !== page) : [...hidden, page] });
+  const move = (index: number, by: number) => {
+    const next = [...pages]; const [page] = next.splice(index, 1); next.splice(index + by, 0, page);
+    settings.edit({ ...settings.draft, pageOrder: next });
+  };
   return <fieldset disabled={!editable} className="pages-prefs"><legend className="sr-only">Páginas do notch</legend>
-    <span className="pages-hint">Escolha o que aparece ao rolar o notch. Início fica sempre.</span>
-    <div className="pages-grid">{optionalPages.map(page => <div key={page} className="setting-row"><label htmlFor={`page-${page}`}>{pageNames[page]}</label>
-      <button id={`page-${page}`} type="button" className="switch" role="switch" aria-checked={!hidden.includes(page)} onClick={() => toggle(page)}><i /></button></div>)}</div>
+    <span className="pages-hint">Escolha o que aparece e em que ordem. Início fica sempre primeiro.</span>
+    <ol className="pages-list">{pages.map((page, index) => <li key={page} className="setting-row" data-hidden={hidden.includes(page) || undefined}>
+      <span className="page-move">
+        <button type="button" className="icon-button" aria-label={`Subir ${pageNames[page]}`} disabled={index === 0} onClick={() => move(index, -1)}><Glyph d="M6 15l6-6 6 6" size={13} /></button>
+        <button type="button" className="icon-button" aria-label={`Descer ${pageNames[page]}`} disabled={index === pages.length - 1} onClick={() => move(index, 1)}><Glyph d="M6 9l6 6 6-6" size={13} /></button>
+      </span>
+      <label htmlFor={`page-${page}`}>{pageNames[page]}</label>
+      <button id={`page-${page}`} type="button" className="switch" role="switch" aria-checked={!hidden.includes(page)} onClick={() => toggle(page)}><i /></button>
+    </li>)}</ol>
   </fieldset>;
 }
 

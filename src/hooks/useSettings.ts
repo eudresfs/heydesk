@@ -33,6 +33,18 @@ export function useSettings(bridge: ShellBridge) {
     void load();
     return () => { active.current = false; loadRequest.current++; };
   }, [load]);
+  // Salvo em outra janela (configurações ↔ notch): adota o novo; edição em curso aqui fica.
+  const dirtyRef = useRef(false);
+  useEffect(() => {
+    if (!bridge.onDesktopEvent) return;
+    let stop: (() => void) | undefined, alive = true;
+    void bridge.onDesktopEvent("settings:changed", payload => {
+      const settings = payload as AppSettings;
+      setSaved(settings);
+      if (!dirtyRef.current) { revision.current++; setDraft(settings); }
+    }).then(fn => { if (alive) stop = fn; else fn(); });
+    return () => { alive = false; stop?.(); };
+  }, [bridge]);
 
   function edit(settings: AppSettings) {
     revision.current++;
@@ -59,5 +71,6 @@ export function useSettings(bridge: ShellBridge) {
   }
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(saved);
+  dirtyRef.current = dirty;
   return { saved, draft, edit, dirty, loadState, saveState, load, save };
 }

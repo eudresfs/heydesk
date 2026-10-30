@@ -4,7 +4,7 @@ import { useIsland } from "./hooks/useIsland";
 import { useSettings } from "./hooks/useSettings";
 import { useReducedMotion } from "./hooks/useReducedMotion";
 import { useContextSnapshots } from "./modules/context/useContext";
-import { ContextPages, pageNames, quotaLow, useLyricIndex, useLyrics, useNow, type ContextPage, weatherLabel } from "./modules/context/ContextPages";
+import { ContextPages, orderPages, pageNames, quotaLow, useLyricIndex, useLyrics, useNow, type ContextPage, weatherLabel } from "./modules/context/ContextPages";
 import { useLyricsOn } from "./modules/context/lyricsStore";
 import { Mascot, type MascotExpression } from "./modules/context/Mascot";
 import { useMascotPresence } from "./modules/context/useMascotPresence";
@@ -34,6 +34,7 @@ const tallAsk = { width: 580, height: 380 } as const;
 export const homeSize = { width: 640, height: 280 } as const;
 /** Teleprompter: mais alto, para várias linhas abaixo da câmera. */
 const prompterSize = { width: 600, height: 300 } as const;
+const settingsPageIds: ContextPage[] = ["appearance", "modules", "pagesPrefs", "mascotPrefs", "soundPrefs", "sportsPrefs", "calendarPrefs"];
 const allContextPages: ContextPage[] = ["home", "media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "note", "ask"];
 function editableTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('input, select, textarea, [contenteditable]:not([contenteditable=false])'));
@@ -75,7 +76,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const [bridge] = useState(() => suppliedBridge ?? createShellBridge());
   const settings = useSettings(bridge);
   const hiddenPages = settings.saved.hiddenPages ?? [];
-  const contextPages = allContextPages.filter(key => key === "home" || !hiddenPages.includes(key));
+  const contextPages = orderPages(allContextPages, settings.saved.pageOrder).filter(key => key === "home" || !hiddenPages.includes(key));
   const [page, setPage] = useState<ContextPage>("home");
   const [menuOpen, setMenuOpen] = useState(false);
   const [colorPickerActive, setColorPickerActive] = useState(false);
@@ -290,6 +291,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
 
   function selectPage(next: ContextPage, keyboard = false, direction = 1) {
     setMenuOpen(false); wheel.reset();
+    // Preferências vivem na janela de configurações (no app); o painel segue na página atual.
+    if (bridge.openSettings && settingsPageIds.includes(next)) { void bridge.openSettings(next); return; }
     if (next === page) return;
     setKeyboardPage(keyboard);
     pageMotion.move(next, direction, keyboard || preferences || next === "appearance" || next === "modules");
@@ -362,7 +365,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       </form>
       <nav className="page-ticks" aria-label="Ações do painel">
         <button type="button" className="pin-button" aria-label="Fixar painel aberto" aria-pressed={pinned} onClick={() => setPinned(value => !value)}><svg width="12" height="12" viewBox="0 0 24 24" fill={pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 6 4 4H6l4-4z" /></svg></button>
-        <button type="button" ref={preferencesButton} className="preferences-trigger" data-preferences-trigger="" aria-label="Preferências" aria-haspopup="menu" aria-expanded={menuOpen} aria-current={preferences ? "page" : undefined} onClick={event => { menuKeyboard.current = event.detail === 0; setMenuOpen(value => !value); }}>
+        <button type="button" ref={preferencesButton} className="preferences-trigger" data-preferences-trigger="" aria-label="Preferências" aria-haspopup="menu" aria-expanded={menuOpen} aria-current={preferences ? "page" : undefined} onClick={event => { if (bridge.openSettings) { void bridge.openSettings("appearance").catch(() => setMenuOpen(true)); return; } menuKeyboard.current = event.detail === 0; setMenuOpen(value => !value); }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
           {settings.dirty && <i className="unsaved-dot" />}
         </button>

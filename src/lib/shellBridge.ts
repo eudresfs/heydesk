@@ -12,6 +12,8 @@ export interface AppSettings {
   mascot?: MascotSettings;
   /** Páginas fora do ciclo do notch. */
   hiddenPages?: string[];
+  /** Ordem das páginas no dock (vazia: padrão). */
+  pageOrder?: string[];
   sounds?: SoundSettings;
 }
 export interface MascotSettings { eyeShape: "oval" | "round" | "pixel" | "line" | "heart"; eyeColor: string; glow: "aurora" | "amber" | "mint" | "rose" | "mono" | "custom"; glowColor: string; blink: boolean; look: boolean; reactions: boolean; bounce: boolean; pace: "calm" | "lively"; inPanel?: boolean }
@@ -54,7 +56,7 @@ export interface ShellBridge {
   askCancel?(): Promise<void>;
   getMediaArt?(): Promise<string | null>;
   /** Eventos do Windows (volume, rede, notificações) emitidos pelo backend na hora. */
-  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded", callback: (payload: unknown) => void): Promise<() => void>;
+  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section", callback: (payload: unknown) => void): Promise<() => void>;
   configureNotifications?(enabled: boolean, apps: string[]): Promise<string>;
   /** Windows em silêncio (Não perturbe/tela cheia), melhor esforço. */
   getQuiet?(): Promise<boolean>;
@@ -65,6 +67,8 @@ export interface ShellBridge {
   recorderOpen?(path: string, reveal: boolean): Promise<void>;
   cameraBubble?(show: boolean): Promise<boolean>;
   cursorOverlay?(show: boolean): Promise<void>;
+  /** Abre (ou traz para frente) a janela de configurações na seção pedida. */
+  openSettings?(section: string): Promise<void>;
   countdownOverlay?(show: boolean): Promise<void>;
   shelfList?(): Promise<import("../modules/context/useShelf").ShelfItem[]>;
   shelfReceiveStart?(): Promise<import("../modules/context/useShelf").ReceiveInfo>;
@@ -136,6 +140,7 @@ export function createShellBridge(): ShellBridge {
     recorderOpen: (path, reveal) => invoke("recorder_open", { path, reveal }),
     cameraBubble: show => invoke("camera_bubble", { show }),
     cursorOverlay: show => invoke("cursor_overlay", { show }),
+    openSettings: section => invoke("open_settings", { section }),
     countdownOverlay: show => invoke("countdown_overlay", { show }),
     shelfList: () => invoke("shelf_list"),
     shelfReceiveStart: () => invoke("shelf_receive_start"),

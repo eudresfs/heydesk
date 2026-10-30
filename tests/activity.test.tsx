@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { advanceActivities, detectActivities, enqueueActivities, idleActivity, type ActivityInput } from "../src/modules/activity/activity";
 import { isTickle } from "../src/modules/context/useMascotTouch";
 import { dueReminders, parseEventText } from "../src/modules/context/useNotes";
+import { orderPages } from "../src/modules/context/ContextPages";
 import { waterCopy, waterPlan } from "../src/modules/context/waterPlan";
 import { kickoffAlert, sportsActivities, type SportGame } from "../src/modules/sports/useSports";
 import type { DesktopSnapshot, Water } from "../src/modules/context/types";
@@ -125,4 +126,10 @@ test("água divide a meta pelo período, recalcula a cada gole e azeda com recus
   assert.equal(waterPlan({ ...water, log: [{ at: at(9, 30), ml: 2000 }] }, at(12)).due, null);
   assert.equal(waterPlan({ ...water, reminders: false }, at(11)).due, null);
   assert.match(waterCopy(waterPlan(water, at(12, 30)), water, at(12, 30)).no, /rim|bebo/);
+});
+
+test("ordem das páginas: Início sempre primeiro e páginas novas na posição padrão", () => {
+  const pages = ["home", "media", "sports", "tasks", "water"] as const;
+  assert.deepEqual(orderPages(pages, []), ["home", "media", "sports", "tasks", "water"]);
+  assert.deepEqual(orderPages(pages, ["water", "tasks", "home"]), ["home", "water", "tasks", "media", "sports"]);
 });

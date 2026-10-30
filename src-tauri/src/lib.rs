@@ -26,13 +26,32 @@ fn load_settings(store: State<'_, SettingsStore>) -> Result<AppSettings, String>
 }
 
 #[tauri::command]
-fn save_settings(settings: AppSettings, store: State<'_, SettingsStore>, monitor: State<'_, codex_usage::CodexMonitor>, claude: State<'_, claude_usage::ClaudeMonitor>, desktop: State<'_, desktop_context::DesktopMonitor>) -> Result<AppSettings, String> {
+fn save_settings(app: tauri::AppHandle, settings: AppSettings, store: State<'_, SettingsStore>, monitor: State<'_, codex_usage::CodexMonitor>, claude: State<'_, claude_usage::ClaudeMonitor>, desktop: State<'_, desktop_context::DesktopMonitor>) -> Result<AppSettings, String> {
     let saved = store.save(settings)?;
     monitor.set_enabled(saved.modules.codex_usage);
     claude.set_enabled(saved.modules.claude_usage);
     shell::HIDE_IN_FULLSCREEN.store(saved.modules.hide_in_fullscreen, std::sync::atomic::Ordering::Relaxed);
     desktop.set_config(saved.desktop_config());
+    // A janela de configurações e o notch se mantêm em dia um com o outro.
+    let _ = app.emit("settings:changed", &saved);
     Ok(saved)
+}
+
+/// Configurações numa janela própria (como um modal), centralizada na tela principal.
+/// Já aberta: só traz para frente e troca de seção.
+#[tauri::command]
+async fn open_settings(app: tauri::AppHandle, section: String) -> Result<(), String> {
+    if !section.chars().all(|c| c.is_ascii_alphanumeric()) || section.len() > 20 { return Err("Seção inválida.".into()); }
+    if let Some(window) = app.get_webview_window("settings") {
+        let _ = window.unminimize();
+        window.set_focus().map_err(|error| error.to_string())?;
+        return window.emit("settings:section", &section).map_err(|error| error.to_string());
+    }
+    let window = tauri::WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App(format!("index.html?view=settings&section={section}").into()))
+        .title("Configurações do Heydesk").inner_size(780.0, 560.0).min_inner_size(640.0, 460.0).center().resizable(true).focused(true)
+        .build().map_err(|error| error.to_string())?;
+    let _ = window.set_focus();
+    Ok(())
 }
 
 #[tauri::command]
@@ -304,7 +323,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         // Atalhos da gravação: Ctrl+Alt+R grava/para (com contagem), Ctrl+Alt+P pausa.
         .plugin(tauri_plugin_global_shortcut::Builder::new()
-            .with_shortcuts(["ctrl+alt+r", "ctrl+alt+p"]).expect("atalhos válidos")
             .with_handler(|app, shortcut, event| {
                 use tauri_plugin_global_shortcut::{Code, ShortcutState};
                 if event.state() != ShortcutState::Pressed { return; }
@@ -333,6 +351,7 @@ pub fn run() {
             recorder_capabilities,
             camera_bubble,
             cursor_overlay,
+            open_settings,
             countdown_overlay,
             recorder_state,
             recorder_start,
@@ -391,6 +410,14 @@ pub fn run() {
             app.manage(calendar::Calendars::start(app.path().app_config_dir()?.join("calendars.json")));
             app.manage(notes::NotesStore::new(app.path().app_config_dir()?.join("notes.json")));
             shell::HIDE_IN_FULLSCREEN.store(loaded.as_ref().map(|settings| settings.modules.hide_in_fullscreen).unwrap_or(true), std::sync::atomic::Ordering::Relaxed);
+            // Atalhos da gravação: registrados um a um e sem derrubar o app quando outro
+            // programa já usa a combinação (antes o Heydesk fechava ao abrir).
+            {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                for shortcut in ["ctrl+alt+r", "ctrl+alt+p"] {
+                    if let Err(error) = app.global_shortcut().register(shortcut) { eprintln!("[Heydesk] Atalho {shortcut} indisponível: {error}"); }
+                }
+            }
             // Só o app instalado (release) procura versões novas.
             if !cfg!(debug_assertions) { updater::start(app.handle().clone()); }
             shell::setup(app)
