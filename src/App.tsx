@@ -14,7 +14,8 @@ import { useActivity, useActivityPush } from "./modules/activity/useActivity";
 import { toastHeight, toastView } from "./modules/activity/activity";
 import type { Activity } from "./modules/activity/activity";
 import { useMascotTouch } from "./modules/context/useMascotTouch";
-import { defaultReminders, dueReminders, useNotes, waterDue, waterToday } from "./modules/context/useNotes";
+import { defaultReminders, dueReminders, useNotes } from "./modules/context/useNotes";
+import { waterCopy, waterPlan } from "./modules/context/waterPlan";
 import { useAsk } from "./modules/context/useAsk";
 import { useSports } from "./modules/sports/useSports";
 import { useCalendars } from "./modules/context/useCalendars";
@@ -91,9 +92,17 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const [fileDrag, setFileDrag] = useState(false);
   const calendars = useCalendars(bridge);
   const notes = useNotes(bridge);
+  // Água: plano do dia (próximo gole, garrafa, humor); relido a cada 30 s.
+  const waterTick = useNow(true, 30_000);
+  const waterNow = notes.state !== "loading" ? waterPlan(notes.water, waterTick) : null;
+  const waterPending = Boolean(waterNow?.due);
+  // Lembrete de água ignorado: o mascote muda de humor e, bravo, fica vermelho (olhos e brilho).
+  const waterLevel = waterPending ? waterNow?.level ?? 0 : -1;
+  const waterMood: MascotExpression = waterLevel >= 2 ? "angry" : waterLevel === 1 ? "worried" : "wide";
+  const waterAngry = waterLevel >= 2;
   const recorder = useRecorder(bridge);
   const [prompterDrag, setPrompterDrag] = useState<number | null>(null);
-  const island = useIsland(bridge, fileDrag || (recorder.busy || recorder.countdown != null) && page === "prompter" || prompterDrag != null || pinned || settings.dirty || settings.saveState === "saving" || colorPickerActive || menuOpen, reducedMotion, activitySize, askTall && askOpen ? tallAsk : page === "home" ? homeSize : page === "prompter" ? { width: prompterSize.width, height: prompterDrag ?? notes.prompter.height ?? prompterSize.height } : null, prompterDrag != null ? 440 : 0);
+  const island = useIsland(bridge, fileDrag || (recorder.busy || recorder.countdown != null) && page === "prompter" || prompterDrag != null || pinned || settings.dirty || settings.saveState === "saving" || colorPickerActive || menuOpen, reducedMotion, activitySize, askTall && askOpen ? tallAsk : page === "home" ? homeSize : page === "prompter" ? { width: prompterSize.width, height: prompterDrag ?? notes.prompter.height ?? prompterSize.height } : null, prompterDrag != null ? 440 : 0, waterPending);
   // Tela cheia (jogo, vídeo) esconde a ilha no Rust: leituras e animações pausam junto.
   const [occluded, setOccluded] = useState(false);
   useEffect(() => {
@@ -131,8 +140,6 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const presence = useMascotPresence(bridge, { enabled: settings.loadState === "ready" && !island.expanded && !away, hovered: island.hovered, playing: playing || awakeOn, reducedMotion });
   // Lembrete de água insistente: fica no notch até "Bebi" ou "Adiar"; a cada 5 min
   // o mascote volta a chamar atenção.
-  const waterTick = useNow(true, 30_000);
-  const waterPending = notes.state !== "loading" && waterDue(notes.water, waterTick);
   const waterNudge = null;
   const activityEnabled = settings.loadState === "ready" && !island.expanded && !island.hidden;
   const pushed = useActivityPush(activityEnabled);
@@ -223,7 +230,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const recNow = useNow(recorder.busy, 500);
   const recShow = recorder.busy && !toast;
   const countShow = recorder.countdown != null;
-  useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast || waterShow ? { width: 372, height: toastHeight } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, recShow, countShow]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast ? { width: 372, height: toastHeight } : waterShow ? { width: 404, height: 104 } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, recShow, countShow]); // eslint-disable-line react-hooks/exhaustive-deps
   // Clicar no notch com a água pendente abre direto na página Água.
   useEffect(() => { if (island.expanded && waterPending && page !== "water") selectPage("water", false, 1); }, [island.expanded]); // eslint-disable-line react-hooks/exhaustive-deps
   // O mascote anuncia: primeiro olha para o ícone que entra, depois reage ao evento.
@@ -249,7 +256,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     if (trackShow) { hadTrack.current = true; return; }
     if (hadTrack.current) { hadTrack.current = false; setMascotBack(value => value + 1); }
   }, [Boolean(trackShow)]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openExpression: MascotExpression = page === "media" && playing ? "happy" : page === "limits" && quotaLow(context) ? "worried" : "normal";
+  const openExpression: MascotExpression = page === "water" && waterPending ? waterMood : page === "media" && playing ? "happy" : page === "limits" && quotaLow(context) ? "worried" : "normal";
 
   useEffect(() => {
     if (!island.focusTarget) return;
@@ -299,7 +306,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     if (settings.dirty && settings.saveState !== "saving") void settings.save();
   }
   const mascotPrefs = { ...defaultMascot, ...settings.draft.mascot };
-  const glow = mascotPrefs.glow === "custom" ? [mascotPrefs.glowColor, mascotPrefs.glowColor, mascotPrefs.glowColor] : glowPresets[mascotPrefs.glow];
+  const glow = waterAngry ? ["#ff7a5c", "#ff453a", "#c81e3a"] : mascotPrefs.glow === "custom" ? [mascotPrefs.glowColor, mascotPrefs.glowColor, mascotPrefs.glowColor] : glowPresets[mascotPrefs.glow];
   // Cor de destaque pinta switches, sliders, progresso e botões primários. O vermelho
   // antigo (#EB0028, padrão de antes do redesenho) vale como neutro.
   const accent = /^#[0-9a-f]{6}$/i.test(settings.draft.appearance.accentColor) && settings.draft.appearance.accentColor.toUpperCase() !== "#EB0028" ? settings.draft.appearance.accentColor : "#E5E5E5";
@@ -344,7 +351,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     }}>
     <svg className="island-surface" ref={island.surfaceRef} aria-hidden="true"><path data-notch-path="" /></svg>
     {island.viewportExpanded && <section className="panel" data-tall={askTall && page === "ask" || undefined} data-no-face={mascotPrefs.inPanel === false || undefined} data-home={page === "home" || undefined} data-prompter={page === "prompter" || undefined} ref={island.panelRef} tabIndex={-1} aria-labelledby="panel-heading" aria-hidden={!island.expanded}>
-      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
+      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
       <form className={`page-form ${preferences && page !== "sportsPrefs" && page !== "calendarPrefs" || settings.loadState === "error" || island.error ? "with-footer" : ""}`} onSubmit={submit}>
         <h1 id="panel-heading" className="sr-only" ref={heading} tabIndex={-1}>{pageNames[page]}</h1>
         <div className="page-viewport" ref={pageMotion.ref}>
@@ -377,18 +384,12 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       </span>)(toastView(toast))}
       {countShow && <span className="toast rec-count" key={`count-${recorder.countdown}`}><b>{recorder.countdown}</b><span>Gravando em…</span></span>}
       {recShow && !countShow && !waterShow && <span className="rec-compact" data-paused={recorder.state.state === "paused" || undefined}><i />{recorder.state.state === "paused" ? "Pausado" : "REC"}<b>{recClock(recordedMs(recorder.state, recNow))}</b></span>}
-      {!toast && !countShow && waterShow && <span className="toast" key={`water-${waterPulse}`} data-tone="neutral" data-kind="water">
-        <span className="toast-icon toast-water"><ActivityIcon icon="drop" /></span>
-        <span className="toast-text"><b>Hora de beber água</b><span>Hoje {(waterToday(notes.water, waterTick) / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} de {(notes.water.goalMl / 1000).toLocaleString("pt-BR")} L · clique para registrar</span></span>
-        <span className="toast-face"><Mascot expression="wide" active={!island.expanded} reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></span>
-      </span>}
       {waterShow ? <span className="compact-side compact-left compact-water" key={`w${waterPulse}`}><ActivityIcon icon="drop" /></span>
         : !activity && liveGame ? <span className="compact-side compact-left compact-live"><span className="live-dot" /></span>
         : trackShow || singing ? <span className="compact-side compact-left">{singing && <span className="compact-media small" aria-hidden="true"><i /><i /><i /></span>}</span>
         : activity ? <span className="compact-side compact-left compact-activity" key={`icon-${activity.id}`} data-tone={activity.tone} title={activity.label}><ActivityIcon icon={activity.icon} /></span>
         : <span className="compact-side compact-left"><time>{clock}</time></span>}
       {/* Jogo ao vivo: o placar ocupa o centro; o mascote sai de cena. */}
-      {waterShow && <span className="compact-water-text" key={`wt${waterPulse}`}>Hora de beber água</span>}
       {!activity && !waterShow && liveGame && <span className="compact-score" title={`${liveGame.home.name} × ${liveGame.away.name} · ${liveGame.leagueName}`}>
         <span className="score-logo">{liveGame.home.logo ? <img src={liveGame.home.logo} alt="" /> : liveGame.home.name.slice(0, 1)}</span>
         <b className="score-team">{teamTag(liveGame.home)}</b>
@@ -411,5 +412,14 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       <span className="sr-only" aria-live="polite">{activity ? `${activity.label}: ${activity.value}` : ""}</span>
       {island.error && <span className="sr-only" role="alert">{island.error}</span>}
     </button>
+    {/* Lembrete de água com botões (fora do botão do compacto: botão dentro de botão não vale). */}
+    {waterShow && !toast && !countShow && !island.expanded && waterNow?.due && (copy => <div className="water-card" key={`wc-${waterPulse}-${waterNow.due}-${waterLevel}`} role="alertdialog" aria-label={copy.title} data-level={waterLevel} data-kind={waterNow.due}>
+      <span className="water-card-face"><Mascot expression={waterMood} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={waterAngry ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
+      <span className="toast-text"><b>{copy.title}</b><span>{copy.sub}</span></span>
+      <span className="water-card-actions">
+        <button type="button" className="water-no" onClick={notes.refuseWater}>{copy.no}</button>
+        <button type="button" className="water-yes" onClick={() => waterNow.due === "refill" ? notes.refillWater() : notes.drink()}>{copy.yes}</button>
+      </span>
+    </div>)(waterCopy(waterNow, notes.water, waterTick))}
   <Tooltips /></main>;
 }

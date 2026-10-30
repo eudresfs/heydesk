@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MascotLook } from "./useMascotPresence";
 
-export type MascotExpression = "normal" | "wide" | "happy" | "sleep" | "worried" | "sleepy" | "yawn" | "wink" | "laugh";
+export type MascotExpression = "normal" | "wide" | "happy" | "sleep" | "worried" | "sleepy" | "yawn" | "wink" | "laugh" | "angry";
 
 // Mesmo desenho em dois tamanhos: no compacto (30 × 16) e na coluna do painel
 // aberto (62 × 33). Os olhos do Nusa medem 8,4 × 12,4 com 15 px entre eles.
@@ -33,6 +33,11 @@ function Eyes({ expression, shape }: { expression: MascotExpression; shape: EyeS
   if (expression === "worried") return <g>
     <ellipse cx="6.5" cy="9.6" rx="3.5" ry="4.6" fill="currentColor" /><ellipse cx="23.5" cy="9.6" rx="3.5" ry="4.6" fill="currentColor" />
     <path d="M2.6 3.4l7 1.8M27.4 3.4l-7 1.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </g>;
+  // Bravo (lembrete de água ignorado): topo dos olhos cortado em diagonal, descendo para o centro.
+  if (expression === "angry") return <g>
+    <path className="mascot-eye" d="M2.8 4.2L10.2 7.6v3a3.7 3.7 0 0 1-7.4 0z" fill="currentColor" />
+    <path className="mascot-eye" d="M27.2 4.2L19.8 7.6v3a3.7 3.7 0 0 0 7.4 0z" fill="currentColor" />
   </g>;
   return <ShapedEyes shape={shape} wide={expression === "wide"} />;
 }

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
 import type { useSettings } from "../../hooks/useSettings";
 import type { useContextSnapshots } from "./useContext";
-import { defaultReminders, parseEventText, pendingTodos, waterByHour, waterDue, waterToday, type NotesControl } from "./useNotes";
+import { defaultReminders, parseEventText, pendingTodos, waterByHour, type NotesControl } from "./useNotes";
+import { SNOOZE_MIN, waterCopy, waterPlan, waterSettings } from "./waterPlan";
 import type { AskControl } from "./useAsk";
 import { Digits } from "../ui/Digits";
 import { PrompterPage } from "../prompter/PrompterPage";
@@ -573,36 +574,77 @@ function CalendarPrefs({ calendars }: { calendars?: CalendarsControl }) {
 const liters = (ml: number) => (ml / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 /** Água (Nusa): total do dia contra a meta, um toque para registrar o copo, gráfico por hora. */
 function WaterPage({ notes }: { notes?: NotesControl }) {
-  const now = useNow(true, 60_000);
+  const now = useNow(true, 30_000);
+  const [editing, setEditing] = useState(false);
   if (!notes) return <div className="statement-page"><Note>Água indisponível.</Note></div>;
-  const water = notes.water, total = waterToday(water, now), share = Math.min(100, Math.round(total / water.goalMl * 100));
-  const hours = waterByHour(water, now), from = 8, to = 22, peak = Math.max(water.cupMl * 2, ...hours.slice(from, to + 1));
+  const water = notes.water, plan = waterPlan(water, now), settings = waterSettings(water);
+  const total = plan.drunk, share = Math.min(100, Math.round(total / water.goalMl * 100));
+  const hours = waterByHour(water, now), from = Math.floor(settings.start / 60), to = Math.max(from + 1, Math.ceil(settings.end / 60) - 1);
+  const peak = Math.max(settings.sip * 2, ...hours.slice(from, to + 1));
   const last = water.log[water.log.length - 1];
-  const due = waterDue(water, now), snoozed = (water.snoozeUntil ?? 0) > now;
-  if (due) return <div className="water-due hd-enter">
-    <svg className="water-due-icon" width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>
-    <div className="water-due-text"><strong>Hora de beber água</strong><span>Hoje {liters(total)} de {liters(water.goalMl)} L · {share}%</span></div>
-    <div className="water-due-actions">
-      <button type="button" className="water-drink" onClick={() => notes.drink()}>Bebi {water.cupMl} ml</button>
-      <span className="water-snooze">Adiar{[15, 30, 60].map(minutes => <button key={minutes} type="button" className="chip" onClick={() => notes.snoozeWater(minutes)}>{minutes} min</button>)}</span>
-    </div>
-  </div>;
+  const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  if (editing) return <WaterSettings notes={notes} onDone={() => setEditing(false)} />;
+  if (plan.due) {
+    const copy = waterCopy(plan, water, now);
+    return <div className="water-due hd-enter" data-level={plan.level}>
+      <svg className="water-due-icon" width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>
+      <div className="water-due-text"><strong>{copy.title}</strong><span>{copy.sub}</span><span className="water-due-meta">Hoje {liters(total)} de {liters(water.goalMl)} L · {share}%</span></div>
+      <div className="water-due-actions">
+        <button type="button" className="water-yes" onClick={() => plan.due === "refill" ? notes.refillWater() : notes.drink()}>{copy.yes}</button>
+        <button type="button" className="water-no" onClick={notes.refuseWater}>{copy.no}</button>
+      </div>
+    </div>;
+  }
+  const status = !water.reminders ? "Lembretes desligados"
+    : share >= 100 ? "Meta batida hoje"
+    : !plan.active ? `Lembretes ${weekdays(settings.days)}, das ${minuteClock(settings.start)} às ${minuteClock(settings.end)}`
+    : plan.nextAt ? `Próximo gole às ${hhmm(plan.nextAt)} · faltam ${plan.sipsLeft} gole${plan.sipsLeft > 1 ? "s" : ""}` : "";
   return <div className="water-page">
     <div className="water-main">
       <div className="water-head"><span className="water-title">Água</span>
-        <button type="button" className="switch" role="switch" aria-checked={water.reminders} aria-label="Lembretes de água" title={water.reminders ? `Lembrar a cada ${water.intervalMin} min` : "Lembretes desligados"} onClick={() => notes.setWater({ reminders: !water.reminders })}><i /></button></div>
+        <button type="button" className="switch" role="switch" aria-checked={water.reminders} aria-label="Lembretes de água" onClick={() => notes.setWater({ reminders: !water.reminders })}><i /></button>
+        <button type="button" className="icon-button" aria-label="Ajustes da água" onClick={() => setEditing(true)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg></button></div>
       <div className="water-value"><span className="statement-number"><Digits value={liters(total)} /></span><span className="statement-unit">/ {liters(water.goalMl)} L</span></div>
-      <span className="water-sub">Hoje · <b>{share}%</b>{share >= 100 ? " · meta batida" : ` · faltam ${liters(Math.max(0, water.goalMl - total))} L`}{snoozed && ` · adiado até ${new Date(water.snoozeUntil!).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`}</span>
+      <span className="water-sub"><b>{share}%</b> · {status}</span>
       <div className="water-bar"><i style={{ width: `${share}%` }} /></div>
       <div className="water-actions">
-        <button type="button" className="water-drink" onClick={() => notes.drink()}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>Beber {water.cupMl} ml</button>
-        <button type="button" className="icon-button" aria-label="Desfazer último gole" title="Desfazer" disabled={!last || now - last.at > 86_400_000} onClick={notes.undoDrink}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg></button>
+        <button type="button" className="water-drink" onClick={() => notes.drink()}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>Beber {settings.sip} ml</button>
+        <button type="button" className="water-bottle" data-low={settings.left < settings.sip || undefined} aria-label={`Garrafa com ${settings.left} de ${settings.bottle} ml. Encher`} onClick={notes.refillWater}><i style={{ height: `${Math.round(settings.left / settings.bottle * 100)}%` }} /><span>{settings.left} ml</span></button>
+        <button type="button" className="icon-button" aria-label="Desfazer último gole" disabled={!last || now - last.at > 86_400_000} onClick={notes.undoDrink}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg></button>
       </div>
     </div>
-    <div className="water-chart" aria-label="Água por hora hoje">
+    <div className="water-chart" aria-label="Água por hora hoje" style={{ gridTemplateColumns: `repeat(${to - from + 1}, 1fr)` }}>
       {hours.slice(from, to + 1).map((ml, index) => <span key={index} className="water-col" title={`${from + index}h · ${ml} ml`} data-now={from + index === new Date(now).getHours() || undefined}><i style={{ height: `${Math.max(ml ? 8 : 3, ml / peak * 100)}%` }} /></span>)}
-      <span className="water-axis"><span>{from}h</span><span>15h</span><span>{to}h</span></span>
+      <span className="water-axis"><span>{from}h</span><span>{Math.round((from + to) / 2)}h</span><span>{to}h</span></span>
     </div>
+  </div>;
+}
+
+const dayLetters = ["D", "S", "T", "Q", "Q", "S", "S"], dayNames = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const minuteClock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+const minutesOf = (text: string) => { const [h, m] = text.split(":").map(Number); return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : null; };
+function weekdays(days: number[]) {
+  const sorted = [...days].sort();
+  if (sorted.join() === "1,2,3,4,5") return "de segunda a sexta";
+  if (sorted.length === 7) return "todos os dias";
+  return sorted.map(day => dayNames[day]).join(", ");
+}
+
+/** Ajustes da água: meta, gole, garrafa, período, dias e soneca de 15 min. */
+function WaterSettings({ notes, onDone }: { notes: NotesControl; onDone(): void }) {
+  const water = notes.water, settings = waterSettings(water), sips = Math.ceil(water.goalMl / settings.sip);
+  const ml = (value: string, min: number, max: number) => { const n = Math.round(Number(value)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null; };
+  return <div className="water-settings hd-enter">
+    <div className="water-head"><span className="water-title">Ajustes da água</span><button type="button" className="chip" onClick={onDone}>Pronto</button></div>
+    <div className="water-form">
+      <label>Meta do dia<span><input className="hd-input" type="number" min="0.5" max="10" step="0.25" value={water.goalMl / 1000} onChange={event => { const n = Number(event.target.value); if (n >= .5 && n <= 10) notes.setWater({ goalMl: Math.round(n * 1000) }); }} />L</span></label>
+      <label>Gole<span><input className="hd-input" type="number" min="50" max="1000" step="50" value={settings.sip} onChange={event => { const n = ml(event.target.value, 50, 1000); if (n) notes.setWater({ cupMl: n }); }} />ml</span></label>
+      <label>Garrafa<span><input className="hd-input" type="number" min="100" max="3000" step="50" value={settings.bottle} onChange={event => { const n = ml(event.target.value, 100, 3000); if (n) notes.setWater({ bottleMl: n, bottleLeftMl: Math.min(n, settings.left) }); }} />ml</span></label>
+      <label>Período<span><input className="hd-input" type="time" value={minuteClock(settings.start)} onChange={event => { const n = minutesOf(event.target.value); if (n != null && n < settings.end) notes.setWater({ startMin: n }); }} />às<input className="hd-input" type="time" value={minuteClock(settings.end)} onChange={event => { const n = minutesOf(event.target.value); if (n != null && n > settings.start) notes.setWater({ endMin: n }); }} /></span></label>
+      <div className="water-days" role="group" aria-label="Dias com lembrete">{dayLetters.map((letter, day) => <button key={day} type="button" className="chip" aria-pressed={settings.days.includes(day)} aria-label={dayNames[day]} onClick={() => notes.setWater({ days: settings.days.includes(day) ? settings.days.filter(item => item !== day) : [...settings.days, day].sort() })}>{letter}</button>)}</div>
+      <label className="water-snooze-row">Soneca de {SNOOZE_MIN} min ao recusar<button type="button" className="switch" role="switch" aria-checked={settings.snooze} aria-label="Soneca ao recusar" onClick={() => notes.setWater({ snooze: !settings.snooze })}><i /></button></label>
+    </div>
+    <span className="water-hint">{sips} goles de {settings.sip} ml, {weekdays(settings.days)}, das {minuteClock(settings.start)} às {minuteClock(settings.end)}: um a cada ~{Math.round((settings.end - settings.start) / sips)} min.</span>
   </div>;
 }
 

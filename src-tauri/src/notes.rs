@@ -25,12 +25,20 @@ pub struct Todo {
 #[serde(rename_all = "camelCase")]
 pub struct Drink { pub at: i64, pub ml: u32 }
 
-/// Lembrete de água: meta diária, copo padrão, lembretes e o registro dos goles.
+/// Lembrete de água: meta diária, volume do gole (`cup_ml`) e da garrafa, período em
+/// minutos do dia, dias da semana (0 = domingo), soneca de 15 min, recusas recentes e
+/// pedido de gole logo após encher a garrafa. `interval_min` ficou só por compatibilidade.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct Water { pub goal_ml: u32, pub cup_ml: u32, pub reminders: bool, pub interval_min: u32, pub log: Vec<Drink>, pub snooze_until: i64 }
+pub struct Water {
+    pub goal_ml: u32, pub cup_ml: u32, pub reminders: bool, pub interval_min: u32, pub log: Vec<Drink>, pub snooze_until: i64,
+    pub bottle_ml: u32, pub bottle_left_ml: u32, pub start_min: u32, pub end_min: u32, pub days: Vec<u8>, pub snooze: bool, pub skips: Vec<i64>, pub ask_at: i64,
+}
 impl Default for Water {
-    fn default() -> Self { Self { goal_ml: 2000, cup_ml: 250, reminders: true, interval_min: 60, log: Vec::new(), snooze_until: 0 } }
+    fn default() -> Self {
+        Self { goal_ml: 2000, cup_ml: 250, reminders: true, interval_min: 60, log: Vec::new(), snooze_until: 0,
+            bottle_ml: 500, bottle_left_ml: 500, start_min: 540, end_min: 1020, days: vec![1, 2, 3, 4, 5], snooze: true, skips: Vec::new(), ask_at: 0 }
+    }
 }
 
 /// Compromisso da agenda local; lembrete `remind_min` antes e na hora.
@@ -69,7 +77,9 @@ impl Notes {
         if self.todos.len() > MAX_TODOS { return Err(format!("Limite de {MAX_TODOS} tarefas.")); }
         let water = &self.water;
         if !(250..=10_000).contains(&water.goal_ml) || !(50..=2_000).contains(&water.cup_ml) || !(15..=240).contains(&water.interval_min) || water.log.len() > 500
-            || water.log.iter().any(|drink| drink.ml == 0 || drink.ml > 2_000) { return Err("Registro de água inválido.".into()); }
+            || water.log.iter().any(|drink| drink.ml == 0 || drink.ml > 2_000)
+            || !(100..=3_000).contains(&water.bottle_ml) || water.bottle_left_ml > water.bottle_ml
+            || water.start_min >= water.end_min || water.end_min > 1_440 || water.days.len() > 7 || water.days.iter().any(|day| *day > 6) || water.skips.len() > 50 { return Err("Registro de água inválido.".into()); }
         if self.events.len() > 500 || self.events.iter().any(|event| event.id.is_empty() || event.id.len() > 64 || event.title.trim().is_empty() || event.title.chars().count() > 140 || event.remind_min > 1440) {
             return Err("Compromisso inválido.".into());
         }

@@ -17,7 +17,7 @@ const editingFocus = () => Boolean(document.activeElement?.matches("input, selec
 // `openSize` troca o painel padrão por um maior (Ask expandido) enquanto aberto.
 // `reach` estende só a área que recebe o mouse para baixo (alça do teleprompter sendo
 // puxada: sem isso o cursor sai da forma, a janela vira click-through e o arrasto para).
-export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, reducedMotion = false, compactSize: BodySize | null = null, openSize: BodySize | null = null, reach = 0) {
+export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, reducedMotion = false, compactSize: BodySize | null = null, openSize: BodySize | null = null, reach = 0, hold = false) {
   const [phase, setPhase] = useState<IslandPhase>("compact");
   const [panelMounted, setPanelMounted] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -30,6 +30,9 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
   const published = useRef({ width: 0, height: 0, reach: 0 });
   const extra = useRef(reach);
   extra.current = reach;
+  // `hold`: um cartão com botões no compacto (lembrete de água); passar o mouse não abre o painel.
+  const holding = useRef(hold);
+  holding.current = hold;
   const center = useRef(typeof window === "undefined" ? 340 : window.innerWidth / 2), origin = useRef({ x: 0, y: 0 });
   const blocked = useRef(preventAutoCollapse), previouslyBlocked = useRef(preventAutoCollapse), reduce = useRef(reducedMotion);
   blocked.current = preventAutoCollapse; reduce.current = reducedMotion;
@@ -130,7 +133,7 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
       if (current.current === "peek") go("compact"); else autoCollapse();
       return;
     }
-    if (suppressed.current || current.current === "open") return;
+    if (suppressed.current || current.current === "open" || holding.current) return;
     if (body.width > bodyTarget(goal("peek")).width + 1) { go("open"); return; }
     go("peek");
     openTimer.current = window.setTimeout(() => {

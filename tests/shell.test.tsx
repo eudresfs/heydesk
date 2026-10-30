@@ -897,6 +897,26 @@ test("Ask expandido mostra a conversa inteira; compacto, só a última troca", a
   assert.equal(host.querySelectorAll(".ask-turn").length, 0);
 });
 
+test("lembrete de água no compacto tem os dois botões, recusa conta e o mascote fica bravo", async () => {
+  const { bridge } = fakeBridge(); const saves: { water?: { skips?: number[]; snoozeUntil?: number; log: unknown[] } }[] = [];
+  // Período do dia inteiro, todos os dias, meta grande: há sempre um gole vencido (exceto nos 10 primeiros minutos do dia).
+  const skips = [Date.now() - 60_000, Date.now() - 120_000];
+  bridge.loadNotes = async () => ({ note: "", todos: [], water: { goalMl: 10000, cupMl: 50, reminders: true, intervalMin: 60, log: [], bottleMl: 750, bottleLeftMl: 750, startMin: 0, endMin: 1440, days: [0, 1, 2, 3, 4, 5, 6], snooze: true, skips } });
+  bridge.saveNotes = async notes => { saves.push(notes); return notes; };
+  await mount(bridge); await advance(40);
+  const card = host.querySelector(".water-card");
+  if (new Date().getHours() === 0 && new Date().getMinutes() < 11) return;
+  assert.ok(card, "cartão aparece");
+  assert.ok(Number(card!.getAttribute("data-level")) >= 2, "recusas e atraso: bravo");
+  assert.ok(card!.querySelector(".mascot[data-expression=angry]"));
+  const [no, yes] = [...card!.querySelectorAll("button")];
+  assert.match(yes.textContent!, /bebi/i); assert.match(no.textContent!, /rim|bebo|Agora/);
+  await act(async () => no.click()); await advance(10);
+  assert.equal(saves.at(-1)?.water?.skips?.length, 3);
+  assert.ok((saves.at(-1)?.water?.snoozeUntil ?? 0) > Date.now() + 14 * 60_000, "soneca de 15 min");
+  assert.equal(host.querySelector(".water-card"), null, "some durante a soneca");
+});
+
 test("Água soma o dia contra a meta, registra o copo e desfaz", async () => {
   const { bridge } = fakeBridge(); const saves: { water?: { log: { ml: number }[] } }[] = [];
   bridge.loadNotes = async () => ({ note: "", todos: [], water: { goalMl: 2000, cupMl: 250, reminders: false, intervalMin: 60, log: [{ at: Date.now() - 60_000, ml: 500 }, { at: Date.now() - 3 * 86_400_000, ml: 900 }] } });

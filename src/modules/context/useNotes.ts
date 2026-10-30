@@ -1,18 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
 import type { CalendarEvent, Notes, Prompter, Todo, Water } from "./types";
+import { SNOOZE_MIN } from "./waterPlan";
 
 export const defaultPrompter: Prompter = { text: "", speed: 4, size: 26, mirror: false, opacity: 100, height: 300 };
-export const defaultWater: Water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [], snoozeUntil: 0 };
-/** Hora de beber: lembretes ligados, 8h–22h, intervalo sem beber vencido e fora do adiamento. */
-export function waterDue(water: Water, now: number) {
-  const hour = new Date(now).getHours();
-  if (!water.reminders || hour < 8 || hour >= 22 || now < (water.snoozeUntil ?? 0)) return false;
-  // Conta do último gole (ou das 8h, sem gole hoje). Não usa a abertura do app:
-  // reiniciar o Heydesk empurrava o lembrete e ele parecia nunca voltar.
-  const morning = new Date(now); morning.setHours(8, 0, 0, 0);
-  return now - Math.max(morning.getTime(), water.log[water.log.length - 1]?.at ?? 0) >= water.intervalMin * 60_000;
-}
+export const defaultWater: Water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [], snoozeUntil: 0, bottleMl: 500, bottleLeftMl: 500, startMin: 540, endMin: 1020, days: [1, 2, 3, 4, 5], snooze: true, skips: [], askAt: 0 };
 const empty: Notes = { note: "", todos: [], water: defaultWater };
 const dayStart = (now: number) => { const date = new Date(now); date.setHours(0, 0, 0, 0); return date.getTime(); };
 /** Total bebido hoje, em ml. */
@@ -102,11 +94,22 @@ export function useNotes(bridge: ShellBridge) {
     // Água: o registro guarda 7 dias; o resto sai ao gravar.
     water: notes.water ?? defaultWater,
     drink: (ml?: number) => {
-      const water = current().water ?? defaultWater, now = Date.now();
-      update({ ...current(), water: { ...water, snoozeUntil: 0, log: [...water.log.filter(drink => now - drink.at < 7 * 86_400_000), { at: now, ml: ml ?? water.cupMl }] } });
+      const water = current().water ?? defaultWater, now = Date.now(), sip = ml ?? water.cupMl;
+      const left = Math.max(0, (water.bottleLeftMl ?? water.bottleMl ?? 500) - sip);
+      update({ ...current(), water: { ...water, snoozeUntil: 0, askAt: 0, bottleLeftMl: left, log: [...water.log.filter(drink => now - drink.at < 7 * 86_400_000), { at: now, ml: sip }] } });
     },
-    snoozeWater: (minutes: number) => { const water = current().water ?? defaultWater; update({ ...current(), water: { ...water, snoozeUntil: Date.now() + minutes * 60_000 } }); },
-    undoDrink: () => { const water = current().water ?? defaultWater; update({ ...current(), water: { ...water, log: water.log.slice(0, -1) } }); },
+    /** Garrafa cheia de novo; logo em seguida o lembrete já pede o gole. */
+    refillWater: () => { const water = current().water ?? defaultWater; update({ ...current(), water: { ...water, bottleLeftMl: water.bottleMl ?? 500, snoozeUntil: 0, askAt: Date.now() } }); },
+    /** Recusa do lembrete: com soneca, volta em 15 min; sem, pula e redistribui a meta. Conta para o humor do dia. */
+    refuseWater: () => {
+      const water = current().water ?? defaultWater, now = Date.now();
+      const skips = [...(water.skips ?? []).filter(time => now - time < 86_400_000), now].slice(-50);
+      update({ ...current(), water: { ...water, skips, askAt: 0, snoozeUntil: water.snooze ?? true ? now + SNOOZE_MIN * 60_000 : 0 } });
+    },
+    undoDrink: () => {
+      const water = current().water ?? defaultWater, last = water.log[water.log.length - 1];
+      update({ ...current(), water: { ...water, log: water.log.slice(0, -1), bottleLeftMl: Math.min(water.bottleMl ?? 500, (water.bottleLeftMl ?? 0) + (last?.ml ?? 0)) } });
+    },
     events: notes.events ?? [],
     addEvent: (title: string, at: number, reminders: number[] = defaultReminders) => update({ ...current(), events: [...(current().events ?? []).filter(event => event.at > Date.now() - 30 * 86_400_000), { id: newId(), title, at, remindMin: 0, reminders: [...reminders].sort((a, b) => b - a) }].sort((a, b) => a.at - b.at) }),
     removeEvent: (id: string) => update({ ...current(), events: (current().events ?? []).filter(event => event.id !== id) }),

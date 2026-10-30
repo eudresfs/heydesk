@@ -2,9 +2,10 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { advanceActivities, detectActivities, enqueueActivities, idleActivity, type ActivityInput } from "../src/modules/activity/activity";
 import { isTickle } from "../src/modules/context/useMascotTouch";
-import { dueReminders, parseEventText, waterDue } from "../src/modules/context/useNotes";
+import { dueReminders, parseEventText } from "../src/modules/context/useNotes";
+import { waterCopy, waterPlan } from "../src/modules/context/waterPlan";
 import { kickoffAlert, sportsActivities, type SportGame } from "../src/modules/sports/useSports";
-import type { DesktopSnapshot } from "../src/modules/context/types";
+import type { DesktopSnapshot, Water } from "../src/modules/context/types";
 
 const snapshot = (battery: Partial<NonNullable<DesktopSnapshot["battery"]>>, media: DesktopSnapshot["media"] = null): DesktopSnapshot => ({
   observedAt: null, cpuPercent: null, memory: null, weather: null, media,
@@ -96,15 +97,32 @@ test("agenda entende hora no texto e avisa 10 min antes e na hora, uma janela de
   assert.deepEqual(dueReminders([both], both.at - 15 * 60_000 + 1_000).map(due => due.key), ["e:b15"]);
 });
 
-test("água fica pendente após o intervalo, só das 8h às 22h, e respeita o adiamento", () => {
-  const at = (hour: number, minute = 0) => new Date(2026, 9, 30, hour, minute).getTime();
-  const water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [{ at: at(9), ml: 250 }], snoozeUntil: 0 };
-  assert.equal(waterDue(water, at(9, 50)), false);
-  assert.equal(waterDue(water, at(10, 1)), true);
-  assert.equal(waterDue({ ...water, snoozeUntil: at(10, 30) }, at(10, 10)), false, "adiado");
-  assert.equal(waterDue({ ...water, snoozeUntil: at(10, 30) }, at(10, 31)), true);
-  assert.equal(waterDue(water, at(23)), false, "fora do horário");
-  assert.equal(waterDue({ ...water, reminders: false }, at(11)), false);
-  assert.equal(waterDue({ ...water, log: [] }, at(8, 50)), false, "sem gole: conta das 8h");
-  assert.equal(waterDue({ ...water, log: [] }, at(9, 1)), true, "reiniciar o app não adia o lembrete");
+test("água divide a meta pelo período, recalcula a cada gole e azeda com recusas", () => {
+  const at = (hour: number, minute = 0, day = 30) => new Date(2026, 9, day, hour, minute).getTime(); // 30/10/2026: sexta
+  const water: Water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [], snoozeUntil: 0, bottleMl: 750, bottleLeftMl: 750, startMin: 540, endMin: 1020, days: [1, 2, 3, 4, 5], snooze: true, skips: [] };
+  // 9h–17h para 8 goles de 250 ml: um a cada hora, a partir das 9h.
+  assert.equal(waterPlan(water, at(9, 59)).due, null);
+  assert.equal(waterPlan(water, at(10, 1)).due, "drink");
+  assert.equal(waterPlan(water, at(8, 30)).active, false, "antes do período");
+  assert.equal(waterPlan(water, at(17, 30)).active, false, "depois do período");
+  assert.equal(waterPlan(water, at(11, 0, 31)).active, false, "sábado fora dos dias escolhidos");
+  // Gole às 10h05: 7 goles restantes no que sobra do dia (~59 min cada).
+  const after = waterPlan({ ...water, log: [{ at: at(10, 5), ml: 250 }] }, at(10, 30));
+  assert.equal(after.due, null); assert.equal(after.sipsLeft, 7);
+  assert.ok(Math.abs(after.nextAt! - (at(10, 5) + (at(17) - at(10, 5)) / 7)) < 1000);
+  // Atraso faz o humor subir; recusas também.
+  assert.equal(waterPlan(water, at(12, 30)).level, 2);
+  const refused = { ...water, skips: [at(10, 2)], snoozeUntil: at(10, 17) };
+  assert.equal(waterPlan(refused, at(10, 10)).due, null, "soneca de 15 min");
+  assert.equal(waterPlan(refused, at(10, 18)).due, "drink");
+  assert.ok(waterPlan(refused, at(10, 18)).level >= 1);
+  // Sem soneca, a recusa pula o gole: o próximo conta a partir dela.
+  assert.equal(waterPlan({ ...water, snooze: false, skips: [at(10, 2)] }, at(10, 30)).due, null);
+  // Garrafa sem o suficiente para um gole: lembra de encher; encheu, pede o gole na hora.
+  assert.equal(waterPlan({ ...water, bottleLeftMl: 100 }, at(10, 1)).due, "refill");
+  assert.equal(waterPlan({ ...water, log: [{ at: at(10), ml: 250 }], askAt: at(10, 20) }, at(10, 21)).due, "drink");
+  // Meta batida: sem lembrete.
+  assert.equal(waterPlan({ ...water, log: [{ at: at(9, 30), ml: 2000 }] }, at(12)).due, null);
+  assert.equal(waterPlan({ ...water, reminders: false }, at(11)).due, null);
+  assert.match(waterCopy(waterPlan(water, at(12, 30)), water, at(12, 30)).no, /rim|bebo/);
 });

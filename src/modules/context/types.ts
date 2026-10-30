@@ -70,7 +70,12 @@ export interface MediaStatus {
 export type MediaAction = "toggle" | "next" | "previous";
 export interface Todo { id: string; text: string; done: boolean; starred: boolean; createdAt: number }
 export interface Drink { at: number; ml: number }
-export interface Water { goalMl: number; cupMl: number; reminders: boolean; intervalMin: number; log: Drink[]; snoozeUntil?: number }
+/** Água: meta do dia, volume do gole (`cupMl`) e da garrafa, período (minutos do dia),
+ * dias da semana (0 = domingo), soneca de 15 min, recusas de hoje e pedido de gole após encher. */
+export interface Water {
+  goalMl: number; cupMl: number; reminders: boolean; intervalMin: number; log: Drink[]; snoozeUntil?: number;
+  bottleMl?: number; bottleLeftMl?: number; startMin?: number; endMin?: number; days?: number[]; snooze?: boolean; skips?: number[]; askAt?: number;
+}
 export interface CalendarEvent { id: string; title: string; at: number; remindMin: number; reminders?: number[] }
 export interface Prompter { text: string; speed: number; size: number; mirror: boolean; opacity?: number; height?: number }
 export interface Notes { note: string; todos: Todo[]; water?: Water; events?: CalendarEvent[]; prompter?: Prompter }

@@ -771,3 +771,45 @@ html[data-view=cursor], html[data-view=cursor] body { background: transparent !i
 .cursor-ripple[data-right]::after { border-color: #5ac8fa; }
 @keyframes cursor-ripple { to { transform: scale(3.2); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .cursor-ripple::after { animation: none; opacity: 0; } }
+
+/* Lembrete de água com botões (cartão no lugar do compacto). Fica mais vermelho com o humor. */
+.water-card { position: absolute; left: 50%; top: 0; z-index: 4; width: 404px; height: 104px; margin-left: -202px; display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: 1fr auto; column-gap: 10px; row-gap: 8px; padding: 12px 16px 12px 12px; box-sizing: border-box; text-align: left; animation: toast-in 380ms cubic-bezier(.23, 1, .32, 1) 120ms both; }
+.water-card-face { grid-row: 1 / span 2; display: grid; place-items: center; align-self: center; width: 52px; height: 52px; border-radius: 50%; background: var(--surface-1); }
+.water-card .toast-text { align-self: center; }
+.water-card-actions { grid-column: 2; display: flex; gap: 6px; justify-content: flex-end; }
+.water-card-actions button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-pill); font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background var(--t-fast), scale var(--t-fast); }
+.water-card-actions button:active { scale: .96; }
+.water-no { background: var(--surface-2); color: var(--text-muted); }
+.water-no:hover { background: var(--surface-3); color: var(--text); }
+.water-yes { background: var(--info); color: #06121f; }
+.water-yes:hover { background: color-mix(in oklab, var(--info) 85%, white); }
+.water-card[data-level="2"] .water-card-face, .water-card[data-level="3"] .water-card-face { background: color-mix(in oklab, var(--rec) 22%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--rec) 45%, transparent); }
+.water-card[data-level="2"] .toast-text b, .water-card[data-level="3"] .toast-text b { color: #ff7a6e; }
+.water-card[data-level="3"] .water-card-face { animation: hd-shake 520ms ease-in-out 2; }
+@keyframes hd-shake { 0%, 100% { translate: 0; } 20%, 60% { translate: -3px 0; } 40%, 80% { translate: 3px 0; } }
+@media (prefers-reduced-motion: reduce) { .water-card, .water-card[data-level="3"] .water-card-face { animation: none; } }
+
+/* Página da água: garrafa (enche ao clicar), ajustes e lembrete com o humor do dia. */
+.water-head .switch { margin-left: auto; }
+.water-head .icon-button { margin-left: 6px; }
+.water-sub { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.water-bottle { position: relative; display: inline-grid; place-items: center; height: 26px; min-width: 64px; padding: 0 8px; overflow: hidden; border: 0; border-radius: var(--r-pill); background: var(--surface-2); color: var(--text-muted); font: inherit; font-size: var(--fs-micro); font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.water-bottle i { position: absolute; left: 0; right: 0; bottom: 0; background: color-mix(in oklab, var(--info) 30%, transparent); }
+.water-bottle span { position: relative; }
+.water-bottle[data-low] { color: var(--warn); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--warn) 50%, transparent); }
+.water-bottle:hover { color: var(--text); }
+.water-due-meta { color: var(--text-faint) !important; }
+.water-due .water-yes, .water-due .water-no { height: 28px; padding: 0 14px; border: 0; border-radius: var(--r-pill); font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
+.water-due[data-level="2"] .water-due-icon, .water-due[data-level="3"] .water-due-icon { color: var(--rec); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--rec) 60%, transparent)); }
+.water-due[data-level="2"] .water-due-text strong, .water-due[data-level="3"] .water-due-text strong { color: #ff7a6e; }
+.water-settings { display: flex; flex-direction: column; gap: 8px; height: 100%; min-width: 0; }
+.water-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.water-form label { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-meta); color: var(--text-muted); }
+.water-form label > span { display: inline-flex; align-items: center; gap: 4px; color: var(--text-faint); }
+.water-form input { width: 64px; height: 24px; padding: 0 6px; font-size: var(--fs-meta); text-align: right; }
+.water-form input[type=time] { width: 76px; text-align: left; }
+.water-days { display: flex; gap: 3px; }
+.water-days .chip { width: 24px; height: 22px; padding: 0; justify-content: center; }
+.water-days .chip[aria-pressed=true] { background: var(--tint-info); color: var(--info); }
+.water-snooze-row .switch { flex: none; }
+.water-hint { font-size: var(--fs-micro); color: var(--text-faint); }
