@@ -24,8 +24,19 @@ pub(crate) fn phone_link(aumid: &str) -> bool { aumid.starts_with("Microsoft.You
 
 /// App, título e corpo de uma notificação; `None` se não passar no filtro.
 pub(crate) fn shape(filters: &[String], app: &str, aumid: &str, texts: &[String]) -> Option<(String, String, String)> {
-    let (app, rest) = if phone_link(aumid) && !texts.is_empty() { (texts[0].clone(), &texts[1..]) } else { (app.to_string(), texts) };
-    if !app_matches(filters, &app) { return None; }
+    // Vincular ao Celular: avisos do iPhone vêm com o app no AUMID
+    // ("…!YourPhoneNotifications_net.whatsapp.WhatsAppSMB") e o contato na 1ª linha;
+    // no formato antigo ("…!App") o nome do app é a 1ª linha.
+    let bundle = aumid.split_once("!YourPhoneNotifications_").map(|(_, bundle)| bundle);
+    let (app, rest) = match bundle {
+        Some(bundle) => {
+            if !app_matches(filters, app) && !app_matches(filters, bundle) { return None; }
+            (if app.trim().is_empty() || app == "Vincular ao Celular" || app == "Phone Link" { bundle.rsplit('.').next().unwrap_or(bundle).to_string() } else { app.to_string() }, texts)
+        }
+        None if phone_link(aumid) && !texts.is_empty() => (texts[0].clone(), &texts[1..]),
+        None => (app.to_string(), texts),
+    };
+    if bundle.is_none() && !app_matches(filters, &app) { return None; }
     let title = rest.first().cloned().unwrap_or_else(|| app.clone()).chars().take(80).collect();
     let body = rest.iter().skip(1).cloned().collect::<Vec<_>>().join(" ").chars().take(300).collect();
     Some((app, title, body))
@@ -223,5 +234,10 @@ mod tests {
         assert_eq!(shape(&filters, "Vincular ao Celular", link, &texts(&["WhatsApp", "Ana", "Bora?"])), Some(("WhatsApp".into(), "Ana".into(), "Bora?".into())));
         assert_eq!(shape(&filters, "Vincular ao Celular", link, &texts(&["Uber", "Viaje"])), None);
         assert_eq!(shape(&filters, "WhatsApp", "5319275A.WhatsAppDesktop_cv1g1gvanyjgm!App", &texts(&["Ana", "Oi", "tudo"])), Some(("WhatsApp".into(), "Ana".into(), "Oi tudo".into())));
+        // iPhone pelo Vincular ao Celular: app no AUMID, contato na 1ª linha.
+        let iphone = "Microsoft.YourPhone_8wekyb3d8bbwe!YourPhoneNotifications_net.whatsapp.WhatsAppSMB";
+        assert_eq!(shape(&filters, "WhatsApp Business", iphone, &texts(&["Ana", "Bora?"])), Some(("WhatsApp Business".into(), "Ana".into(), "Bora?".into())));
+        assert_eq!(shape(&filters, "", iphone, &texts(&["Ana", "Bora?"])), Some(("WhatsAppSMB".into(), "Ana".into(), "Bora?".into())));
+        assert_eq!(shape(&filters, "Uber", "Microsoft.YourPhone_8wekyb3d8bbwe!YourPhoneNotifications_com.ubercab.UberClient", &texts(&["Viagem"])), None);
     }
 }

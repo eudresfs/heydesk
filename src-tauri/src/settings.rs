@@ -185,7 +185,7 @@ impl AppSettings {
         if self.schema_version != 3 {
             return Err(format!("Versão de configurações não suportada: {}.", self.schema_version));
         }
-        if !self.appearance.opacity.is_finite() || !(70.0..=100.0).contains(&self.appearance.opacity) {
+        if !self.appearance.opacity.is_finite() || !(30.0..=100.0).contains(&self.appearance.opacity) {
             return Err("A opacidade deve estar entre 70 e 100.".into());
         }
         let color = self.appearance.accent_color.as_bytes();
@@ -319,11 +319,11 @@ mod tests {
     #[test]
     fn validates_opacity_and_hex_color() {
         let mut settings = AppSettings::default();
-        for opacity in [70.0, 94.5, 100.0] {
+        for opacity in [30.0, 70.0, 94.5, 100.0] {
             settings.appearance.opacity = opacity;
             assert!(settings.validate().is_ok());
         }
-        for opacity in [69.0, 100.1, f64::NAN, f64::INFINITY] {
+        for opacity in [29.0, 100.1, f64::NAN, f64::INFINITY] {
             settings.appearance.opacity = opacity;
             assert!(settings.validate().is_err());
         }

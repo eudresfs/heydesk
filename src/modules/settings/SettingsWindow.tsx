@@ -4,26 +4,25 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { createShellBridge } from "../../lib/shellBridge";
 import { useSettings } from "../../hooks/useSettings";
-import { ContextPages, type ContextPage } from "../context/ContextPages";
-import { useContextSnapshots } from "../context/useContext";
+import type { ContextPage } from "../context/ContextPages";
 import { useCalendars } from "../context/useCalendars";
 import { useSports } from "../sports/useSports";
 import { useNotes } from "../context/useNotes";
-import { AppearanceSection, MascotSection, ModulesSection, PagesSection, SoundSection, WaterSection } from "./sections";
+import { AppearanceSection, CalendarsSection, PagesSection, SoundSection, SportsSection, WaterSection } from "./sections";
 
 export const settingsSections: { page: ContextPage; label: string; hint: string }[] = [
-  { page: "appearance", label: "Aparência", hint: "Opacidade, cor de destaque e movimento." },
-  { page: "mascotPrefs", label: "Mascote", hint: "Olhos, brilho e reações." },
+  { page: "appearance", label: "Aparência", hint: "Ilha, cores, animações e o mascote." },
+  { page: "pagesPrefs", label: "Páginas", hint: "Quais páginas aparecem, em que ordem e o que fica no notch fechado." },
   { page: "soundPrefs", label: "Sons", hint: "Volume, estilo e quando tocar." },
-  { page: "modules", label: "Módulos", hint: "O que o notch acompanha." },
-  { page: "pagesPrefs", label: "Páginas", hint: "Quais páginas aparecem e em que ordem." },
   { page: "waterPrefs", label: "Água", hint: "Meta, gole, garrafa e quando lembrar." },
-  { page: "sportsPrefs", label: "Esportes", hint: "Times e campeonatos seguidos." },
-  { page: "calendarPrefs", label: "Agendas", hint: "Calendários por link ICS." },
+  { page: "sportsPrefs", label: "Esportes", hint: "Competições, times e chave do PandaScore." },
+  { page: "calendarPrefs", label: "Agendas", hint: "Calendários assinados por link ICS." },
 ];
+// Seções antigas apontam para as que as absorveram.
+const aliases: Partial<Record<string, ContextPage>> = { mascotPrefs: "appearance", modules: "pagesPrefs" };
 // Esportes e Agendas salvam sozinhos; o resto usa o botão Salvar.
 const selfSaving: ContextPage[] = ["sportsPrefs", "calendarPrefs", "waterPrefs"];
-const pick = (value: string | null): ContextPage => settingsSections.find(section => section.page === value)?.page ?? "appearance";
+const pick = (value: string | null): ContextPage => settingsSections.find(section => section.page === (aliases[value ?? ""] ?? value))?.page ?? "appearance";
 
 export function SettingsWindow() {
   const bridge = useMemo(createShellBridge, []);
@@ -32,7 +31,6 @@ export function SettingsWindow() {
   const sports = useSports(bridge, ready);
   const calendars = useCalendars(bridge);
   const notes = useNotes(bridge);
-  const context = useContextSnapshots(bridge, false, settings.saved.modules);
   const [section, setSection] = useState<ContextPage>(() => pick(new URLSearchParams(location.search).get("section")));
   // A engrenagem do notch com a janela já aberta só troca de seção.
   useEffect(() => {
@@ -61,12 +59,11 @@ export function SettingsWindow() {
         {settings.loadState === "loading" ? <p className="settings-status">Carregando…</p>
           : <fieldset className="set-fieldset" disabled={!ready && !selfSaving.includes(section)}>
             {section === "appearance" ? <AppearanceSection settings={settings} />
-              : section === "mascotPrefs" ? <MascotSection settings={settings} />
               : section === "soundPrefs" ? <SoundSection settings={settings} />
-              : section === "modules" ? <ModulesSection settings={settings} />
               : section === "pagesPrefs" ? <PagesSection settings={settings} />
               : section === "waterPrefs" ? <WaterSection notes={notes} />
-              : <div className="set-legacy"><ContextPages page={section} bridge={bridge} settings={settings} context={context} editable={ready} setColorPickerActive={() => {}} sports={sports} calendars={calendars} /></div>}
+              : section === "sportsPrefs" ? <SportsSection sports={sports} bridge={bridge} />
+              : <CalendarsSection calendars={calendars} />}
           </fieldset>}
       </div>
       {saves && <footer className="settings-footer">

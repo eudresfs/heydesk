@@ -591,15 +591,13 @@ function CalendarPrefs({ calendars }: { calendars?: CalendarsControl }) {
 
 const liters = (ml: number) => (ml / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 /** Água (Nusa): total do dia contra a meta, um toque para registrar o copo, gráfico por hora. */
-function WaterPage({ notes, onConfigure }: { notes?: NotesControl; onConfigure?(): void }) {
+function WaterPage({ notes }: { notes?: NotesControl }) {
   const now = useNow(true, 30_000);
-  const [editing, setEditing] = useState(false);
   if (!notes) return <div className="statement-page"><Note>Água indisponível.</Note></div>;
   const water = notes.water, plan = waterPlan(water, now), settings = waterSettings(water);
   const total = plan.drunk, share = Math.min(100, Math.round(total / water.goalMl * 100));
   const last = water.log[water.log.length - 1];
   const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-  if (editing) return <WaterSettings notes={notes} onDone={() => setEditing(false)} />;
   if (plan.due) {
     const copy = waterCopy(plan, water, now);
     return <div className="water-due hd-enter" data-level={plan.level}>
@@ -628,7 +626,7 @@ function WaterPage({ notes, onConfigure }: { notes?: NotesControl; onConfigure?(
     <div className="water-info">
       <div className="water-head"><span className="water-title">Água · {share}%</span>
         <button type="button" className="switch" role="switch" aria-checked={water.reminders} aria-label="Lembretes de água" onClick={() => notes.setWater({ reminders: !water.reminders })}><i /></button>
-        <button type="button" className="icon-button" aria-label="Ajustes da água" onClick={() => onConfigure ? onConfigure() : setEditing(true)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg></button></div>
+</div>
       <span className="water-sub">{status}{plan.active && plan.sipsLeft > 0 ? ` · faltam ${plan.sipsLeft} gole${plan.sipsLeft > 1 ? "s" : ""}` : ""}</span>
       <div className="water-actions">
         <button type="button" className="water-drink" onClick={() => notes.drink()}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>Beber {settings.sip} ml</button>
@@ -784,7 +782,7 @@ export function ContextPages({ page, bridge, settings, context, editable, setCol
   if (page === "home") return <Home context={context} media={saved.media ? data?.media : null} notes={notes} go={go ?? (() => {})} bridge={bridge} calendars={calendars} />;
   if (page === "tasks") return <Tasks notes={notes} />;
   if (page === "note") return <QuickNote notes={notes} />;
-  if (page === "water") return <WaterPage notes={notes} onConfigure={go ? () => go("waterPrefs") : undefined} />;
+  if (page === "water") return <WaterPage notes={notes} />;
   if (page === "prompter") return <PrompterPage notes={notes} recorder={recorder} ghost={ghost} />;
   if (page === "shelf") return <ShelfPage shelf={shelf} />;
   if (page === "agenda") return <Agenda notes={notes} calendars={calendars} onConfigure={() => go?.("calendarPrefs")} />;
@@ -799,7 +797,7 @@ export function ContextPages({ page, bridge, settings, context, editable, setCol
   if (page === "media") return <Player media={saved.media ? data?.media : null} bridge={bridge} enabled={saved.media} stale={context.desktop.failed} />;
   if (page === "limits") return <Claude bridge={bridge} enabled={saved.claudeUsage !== false} context={context} />;
   if (page === "system") return <System data={data} enabled={saved.systemInfo} previous={context.desktop.failed} network={context.network ?? []} awake={awake} />;
-  if (page === "appearance") return <fieldset disabled={!editable} className="appearance-fields"><legend className="sr-only">Aparência da ilha</legend><div className="setting-row opacity-row"><label htmlFor="opacity">Opacidade do compacto <output htmlFor="opacity">{settings.draft.appearance.opacity}%</output></label><input id="opacity" disabled={!editable} type="range" min="70" max="100" step="1" style={{ ["--fill" as string]: `${(settings.draft.appearance.opacity - 70) / 30 * 100}%` }} value={settings.draft.appearance.opacity} onChange={event => settings.edit({ ...settings.draft, appearance: { ...settings.draft.appearance, opacity: Number(event.target.value) } })} /></div><div className="setting-row"><label htmlFor="accent-color">Cor de destaque</label><input id="accent-color" disabled={!editable} type="color" value={settings.draft.appearance.accentColor} onClick={() => setColorPickerActive(true)} onChange={event => { setColorPickerActive(false); settings.edit({ ...settings.draft, appearance: { ...settings.draft.appearance, accentColor: event.target.value.toUpperCase() } }); }} /></div><div className="setting-row"><span id="reduced-motion">Movimento reduzido</span><div className="segmented" role="radiogroup" aria-labelledby="reduced-motion">{([["system", "Sistema"], ["on", "Reduzido"], ["off", "Completo"]] as const).map(([value, label]) => <button key={value} type="button" role="radio" aria-checked={settings.draft.motion.reducedMotion === value} onClick={() => settings.edit({ ...settings.draft, motion: { reducedMotion: value } })}>{label}</button>)}</div></div></fieldset>;
+  if (page === "appearance") return <fieldset disabled={!editable} className="appearance-fields"><legend className="sr-only">Aparência da ilha</legend><div className="setting-row opacity-row"><label htmlFor="opacity">Opacidade do compacto <output htmlFor="opacity">{settings.draft.appearance.opacity}%</output></label><input id="opacity" disabled={!editable} type="range" min="30" max="100" step="1" style={{ ["--fill" as string]: `${(settings.draft.appearance.opacity - 30) / 70 * 100}%` }} value={settings.draft.appearance.opacity} onChange={event => settings.edit({ ...settings.draft, appearance: { ...settings.draft.appearance, opacity: Number(event.target.value) } })} /></div><div className="setting-row"><label htmlFor="accent-color">Cor de destaque</label><input id="accent-color" disabled={!editable} type="color" value={settings.draft.appearance.accentColor} onClick={() => setColorPickerActive(true)} onChange={event => { setColorPickerActive(false); settings.edit({ ...settings.draft, appearance: { ...settings.draft.appearance, accentColor: event.target.value.toUpperCase() } }); }} /></div><div className="setting-row"><span id="reduced-motion">Movimento reduzido</span><div className="segmented" role="radiogroup" aria-labelledby="reduced-motion">{([["system", "Sistema"], ["on", "Reduzido"], ["off", "Completo"]] as const).map(([value, label]) => <button key={value} type="button" role="radio" aria-checked={settings.draft.motion.reducedMotion === value} onClick={() => settings.edit({ ...settings.draft, motion: { reducedMotion: value } })}>{label}</button>)}</div></div></fieldset>;
 
   return <fieldset disabled={!editable} className="module-fields"><legend className="sr-only">Módulos da ilha</legend>{([ ["claudeUsage", "Uso do Claude"], ["hideInFullscreen", "Ocultar em tela cheia"], ["notifications", "Avisos do WhatsApp"], ["systemInfo", "CPU e memória"], ["media", "Player do Windows"], ["weather", "Clima no compacto"] ] as const).map(([key, label]) => <div className="setting-row" key={key}><label htmlFor={`module-${key}`}>{label}{key === "notifications" && notificationStatus && notificationStatus !== "on" && notificationStatus !== "off" && <span className="module-city" title={notificationStatus === "denied" ? "Permita em Configurações › Privacidade › Notificações" : undefined}>{notificationStatus === "denied" ? "Permita em Configurações › Privacidade › Notificações" : "Indisponível neste Windows"}</span>}{key === "weather" && <span className="module-city" title="Local configurado, sem localização automática">{settings.draft.weatherLocation?.city ?? "Local não configurado"}</span>}</label><button id={`module-${key}`} type="button" className="switch" role="switch" disabled={!editable} aria-checked={settings.draft.modules[key] !== false} onClick={() => settings.edit({ ...settings.draft, modules: { ...settings.draft.modules, [key]: settings.draft.modules[key] === false } })}><i /></button></div>)}<button type="button" className="module-pages" onClick={() => go?.("pagesPrefs")}>Páginas do notch<span>{optionalPages.length - (settings.draft.hiddenPages?.length ?? 0)} de {optionalPages.length} visíveis ›</span></button></fieldset>;
 }

@@ -1,6 +1,9 @@
 // Seções da janela de configurações: cartões agrupados, cada opção com título e
 // descrição, controles em tamanho de janela (não de notch) e prévia ao vivo onde ajuda.
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import type { ShellBridge } from "../../lib/shellBridge";
+import type { CalendarsControl } from "../context/useCalendars";
+import type { SportsControl, TeamOption } from "../sports/useSports";
 import type { useSettings } from "../../hooks/useSettings";
 import { defaultMascot, defaultSounds, type MascotSettings, type SoundSettings } from "../../lib/shellBridge";
 import { eyeColors, glowNames, glowPresets, optionalPages, orderPages, pageNames, shapes } from "../context/ContextPages";
@@ -38,44 +41,35 @@ function Preview({ settings, label }: { settings: Settings; label: string }) {
 
 const accents = ["#E5E5E5", "#0A84FF", "#30D158", "#00EB46", "#FFD60A", "#FF9F0A", "#FF453A", "#BF5AF2", "#FF375F"];
 
+/** Aparência e mascote numa seção só: a prévia mostra tudo junto. */
 export function AppearanceSection({ settings }: { settings: Settings }) {
   const appearance = settings.draft.appearance;
+  const mascot = { ...defaultMascot, ...settings.draft.mascot };
   const set = (patch: Partial<typeof appearance>) => settings.edit({ ...settings.draft, appearance: { ...appearance, ...patch } });
+  const setMascot = (patch: Partial<MascotSettings>) => settings.edit({ ...settings.draft, mascot: { ...mascot, ...patch } });
   return <>
     <Preview settings={settings} label="Prévia do notch" />
     <Group title="Ilha">
-      <Row title="Opacidade do notch fechado" desc="Quanto do fundo aparece através da ilha quando ela está compacta."><Slider value={appearance.opacity} min={70} max={100} label="Opacidade do notch fechado" onChange={opacity => set({ opacity })} /></Row>
-      <Row title="Cor de destaque" desc="Pinta botões principais, interruptores, barras de progresso e seleções." wide>
+      <Row title="Opacidade do notch fechado" desc="Quanto do fundo aparece através da ilha compacta. Aplicado ao salvar."><Slider value={appearance.opacity} min={30} max={100} label="Opacidade do notch fechado" onChange={opacity => set({ opacity })} /></Row>
+      <Row title="Cor de destaque" desc="Botões principais, interruptores, barras de progresso e seleções." wide>
         <span className="set-swatches">{accents.map(color => <button key={color} type="button" className="set-swatch" style={{ ["--swatch" as string]: color }} aria-label={`Destaque ${color}`} aria-pressed={appearance.accentColor.toUpperCase() === color} onClick={() => set({ accentColor: color })} />)}
           <label className="set-swatch set-swatch-custom" title="Outra cor"><input type="color" aria-label="Outra cor de destaque" value={appearance.accentColor} onChange={event => set({ accentColor: event.target.value.toUpperCase() })} /></label></span>
       </Row>
-    </Group>
-    <Group title="Movimento">
       <Row title="Animações" desc="Reduzido troca molas e deslizes por transições curtas. Sistema segue o Windows."><Segmented label="Animações" value={settings.draft.motion.reducedMotion} options={[["system", "Sistema"], ["on", "Reduzido"], ["off", "Completo"]]} onChange={reducedMotion => settings.edit({ ...settings.draft, motion: { reducedMotion } })} /></Row>
     </Group>
-  </>;
-}
-
-export function MascotSection({ settings }: { settings: Settings }) {
-  const mascot = { ...defaultMascot, ...settings.draft.mascot };
-  const set = (patch: Partial<MascotSettings>) => settings.edit({ ...settings.draft, mascot: { ...mascot, ...patch } });
-  return <>
-    <Preview settings={settings} label="Prévia do mascote" />
-    <Group title="Rosto">
-      <Row title="Formato dos olhos" wide><span className="set-options">{shapes.map(([shape, label]) => <button key={shape} type="button" className="set-option" aria-pressed={mascot.eyeShape === shape} onClick={() => set({ eyeShape: shape })}><Mascot expression="normal" active={false} reducedMotion shape={shape} color={mascot.eyeColor} /><span>{label}</span></button>)}</span></Row>
-      <Row title="Cor dos olhos" wide><span className="set-swatches">{eyeColors.map(([color, label]) => <button key={color} type="button" className="set-swatch" style={{ ["--swatch" as string]: color }} aria-label={`Olhos ${label.toLowerCase()}`} title={label} aria-pressed={mascot.eyeColor.toUpperCase() === color} onClick={() => set({ eyeColor: color })} />)}</span></Row>
+    <Group title="Mascote">
+      <Row title="Formato dos olhos" wide><span className="set-options">{shapes.map(([shape, label]) => <button key={shape} type="button" className="set-option" aria-pressed={mascot.eyeShape === shape} onClick={() => setMascot({ eyeShape: shape })}><Mascot expression="normal" active={false} reducedMotion shape={shape} color={mascot.eyeColor} /><span>{label}</span></button>)}</span></Row>
+      <Row title="Cor dos olhos" wide><span className="set-swatches">{eyeColors.map(([color, label]) => <button key={color} type="button" className="set-swatch" style={{ ["--swatch" as string]: color }} aria-label={`Olhos ${label.toLowerCase()}`} title={label} aria-pressed={mascot.eyeColor.toUpperCase() === color} onClick={() => setMascot({ eyeColor: color })} />)}</span></Row>
       <Row title="Brilho" desc="A luz atrás do mascote, no notch e no painel." wide>
-        <span className="set-swatches">{(Object.keys(glowPresets) as (keyof typeof glowPresets)[]).map(name => <button key={name} type="button" className="set-swatch" style={{ ["--swatch" as string]: `linear-gradient(135deg, ${glowPresets[name].join(", ")})` }} aria-label={`Brilho ${glowNames[name]}`} title={glowNames[name]} aria-pressed={mascot.glow === name} onClick={() => set({ glow: name })} />)}
-          <label className="set-swatch set-swatch-custom" title="Outra cor" data-active={mascot.glow === "custom" || undefined}><input type="color" aria-label="Outra cor de brilho" value={mascot.glowColor} onChange={event => set({ glow: "custom", glowColor: event.target.value.toUpperCase() })} /></label></span>
+        <span className="set-swatches">{(Object.keys(glowPresets) as (keyof typeof glowPresets)[]).map(name => <button key={name} type="button" className="set-swatch" style={{ ["--swatch" as string]: `linear-gradient(135deg, ${glowPresets[name].join(", ")})` }} aria-label={`Brilho ${glowNames[name]}`} title={glowNames[name]} aria-pressed={mascot.glow === name} onClick={() => setMascot({ glow: name })} />)}
+          <label className="set-swatch set-swatch-custom" title="Outra cor" data-active={mascot.glow === "custom" || undefined}><input type="color" aria-label="Outra cor de brilho" value={mascot.glowColor} onChange={event => setMascot({ glow: "custom", glowColor: event.target.value.toUpperCase() })} /></label></span>
       </Row>
-    </Group>
-    <Group title="Comportamento">
-      <Row title="Piscar" desc="Uma piscada de tempos em tempos."><Toggle label="Piscar" on={mascot.blink} onChange={blink => set({ blink })} /></Row>
-      <Row title="Seguir o cursor" desc="Os olhos acompanham o mouse perto do notch."><Toggle label="Seguir o cursor" on={mascot.look} onChange={look => set({ look })} /></Row>
-      <Row title="Reações" desc="Reage a toques, cócegas e avisos."><Toggle label="Reações" on={mascot.reactions} onChange={reactions => set({ reactions })} /></Row>
-      <Row title="Quique quando feliz" desc="Pula de leve com música tocando."><Toggle label="Quique quando feliz" on={mascot.bounce} onChange={bounce => set({ bounce })} /></Row>
-      <Row title="Ritmo"><Segmented label="Ritmo" value={mascot.pace} options={[["calm", "Calmo"], ["lively", "Animado"]]} onChange={pace => set({ pace })} /></Row>
-      <Row title="Mostrar no painel aberto" desc="Desligado, o mascote fica só no notch fechado."><Toggle label="Mostrar no painel aberto" on={mascot.inPanel !== false} onChange={inPanel => set({ inPanel })} /></Row>
+      <Row title="Ritmo"><Segmented label="Ritmo" value={mascot.pace} options={[["calm", "Calmo"], ["lively", "Animado"]]} onChange={pace => setMascot({ pace })} /></Row>
+      <Row title="Piscar" desc="Uma piscada de tempos em tempos."><Toggle label="Piscar" on={mascot.blink} onChange={blink => setMascot({ blink })} /></Row>
+      <Row title="Seguir o cursor" desc="Os olhos acompanham o mouse perto do notch."><Toggle label="Seguir o cursor" on={mascot.look} onChange={look => setMascot({ look })} /></Row>
+      <Row title="Reações" desc="Reage a toques, cócegas e avisos."><Toggle label="Reações" on={mascot.reactions} onChange={reactions => setMascot({ reactions })} /></Row>
+      <Row title="Quique quando feliz" desc="Pula de leve com música tocando."><Toggle label="Quique quando feliz" on={mascot.bounce} onChange={bounce => setMascot({ bounce })} /></Row>
+      <Row title="Mostrar no painel aberto" desc="Desligado, o mascote fica só no notch fechado."><Toggle label="Mostrar no painel aberto" on={mascot.inPanel !== false} onChange={inPanel => setMascot({ inPanel })} /></Row>
     </Group>
   </>;
 }
@@ -101,41 +95,64 @@ export function SoundSection({ settings }: { settings: Settings }) {
   </>;
 }
 
-const moduleRows = [
-  ["media", "Player do Windows", "Música e vídeo tocando, com capa, controles e letra."],
-  ["claudeUsage", "Uso do Claude", "Cota de 5 horas e semanal da sua conta."],
-  ["systemInfo", "CPU e memória", "Uso do sistema, bateria e rede na página Sistema."],
-  ["weather", "Clima no notch fechado", null],
-  ["notifications", "Avisos do WhatsApp", "Mensagens que chegam pelo Vincular ao Celular."],
-  ["hideInFullscreen", "Ocultar em tela cheia", "Some durante jogos, vídeos e apresentações."],
-] as const;
+// Páginas que dependem de um recurso: esconder a página também desliga a coleta dele.
+const pageModule: Partial<Record<string, "claudeUsage" | "systemInfo">> = { limits: "claudeUsage", system: "systemInfo" };
+const pageHints: Partial<Record<string, string>> = { media: "Música e vídeo tocando, com capa, controles e letra.", limits: "Cota de 5 horas e semanal do Claude.", system: "CPU, memória, bateria e rede.", sports: "Placar ao vivo dos times seguidos.", agenda: "Compromissos locais e agendas assinadas.", water: "Meta do dia e lembretes de água.", shelf: "Arquivos à mão, inclusive do celular.", prompter: "Roteiro rolando e gravação de tela." };
 
-export function ModulesSection({ settings, notificationStatus }: { settings: Settings; notificationStatus?: string }) {
-  const modules = settings.draft.modules;
-  return <Group title="O que o notch acompanha">
-    {moduleRows.map(([key, title, desc]) => <Row key={key} title={title} desc={key === "weather" ? `Local: ${settings.draft.weatherLocation?.city ?? "não configurado"}.` : key === "notifications" && notificationStatus === "denied" ? "Permita em Configurações do Windows › Privacidade › Notificações." : desc}>
-      <Toggle label={title} on={modules[key] !== false} onChange={on => settings.edit({ ...settings.draft, modules: { ...modules, [key]: on } })} />
-    </Row>)}
-  </Group>;
-}
-
-export function PagesSection({ settings }: { settings: Settings }) {
+/** Páginas e recursos: arraste para ordenar; o interruptor mostra/esconde (e liga/desliga o recurso da página). */
+export function PagesSection({ settings, notificationStatus }: { settings: Settings; notificationStatus?: string }) {
   const hidden = settings.draft.hiddenPages ?? [];
   const pages = orderPages(optionalPages, settings.draft.pageOrder);
-  const move = (index: number, by: number) => { const next = [...pages]; const [page] = next.splice(index, 1); next.splice(index + by, 0, page); settings.edit({ ...settings.draft, pageOrder: next }); };
-  const toggle = (page: string, on: boolean) => settings.edit({ ...settings.draft, hiddenPages: on ? hidden.filter(item => item !== page) : [...hidden, page] });
-  return <Group title={`Ordem no dock · ${pages.length - hidden.length} de ${pages.length} visíveis`}>
-    <div className="set-row set-row-fixed"><span className="set-order">1</span><div className="set-text"><span className="set-title">{pageNames.home}</span><span className="set-desc">Sempre a primeira.</span></div></div>
-    {pages.map((page, index) => <div key={page} className="set-row" data-off={hidden.includes(page) || undefined}>
-      <span className="set-order">{index + 2}</span>
-      <div className="set-text"><span className="set-title">{pageNames[page]}</span></div>
-      <div className="set-control">
-        <button type="button" className="set-icon" aria-label={`Subir ${pageNames[page]}`} disabled={index === 0} onClick={() => move(index, -1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg></button>
-        <button type="button" className="set-icon" aria-label={`Descer ${pageNames[page]}`} disabled={index === pages.length - 1} onClick={() => move(index, 1)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg></button>
-        <Toggle label={`Mostrar ${pageNames[page]}`} on={!hidden.includes(page)} onChange={on => toggle(page, on)} />
-      </div>
-    </div>)}
-  </Group>;
+  const modules = settings.draft.modules;
+  const [drag, setDrag] = useState<{ index: number; dy: number; height: number } | null>(null);
+  const target = drag ? Math.max(0, Math.min(pages.length - 1, drag.index + Math.round(drag.dy / drag.height))) : -1;
+  const reorder = (from: number, to: number) => { if (from === to) return; const next = [...pages]; const [page] = next.splice(from, 1); next.splice(to, 0, page); settings.edit({ ...settings.draft, pageOrder: next }); };
+  const toggle = (page: string, on: boolean) => {
+    const module = pageModule[page];
+    settings.edit({ ...settings.draft, hiddenPages: on ? hidden.filter(item => item !== page) : [...hidden, page], modules: module ? { ...modules, [module]: on } : modules });
+  };
+  const grab = (index: number) => (event: React.PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    const row = event.currentTarget.closest<HTMLElement>(".set-row"), startY = event.clientY;
+    if (!row) return;
+    try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* sem captura: os eventos da janela bastam */ }
+    const height = row.getBoundingClientRect().height;
+    setDrag({ index, dy: 0, height });
+    const move = (moveEvent: PointerEvent) => setDrag({ index, dy: moveEvent.clientY - startY, height });
+    const up = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up);
+      setDrag(null); reorder(index, Math.max(0, Math.min(pages.length - 1, index + Math.round((upEvent.clientY - startY) / height))));
+    };
+    window.addEventListener("pointermove", move); window.addEventListener("pointerup", up);
+  };
+  // Teclado: setas com o puxador focado.
+  const keys = (index: number) => (event: React.KeyboardEvent) => {
+    if (event.key === "ArrowUp" && index > 0) { event.preventDefault(); reorder(index, index - 1); }
+    if (event.key === "ArrowDown" && index < pages.length - 1) { event.preventDefault(); reorder(index, index + 1); }
+  };
+  const shift = (index: number) => {
+    if (!drag || index === drag.index) return undefined;
+    if (drag.index < index && index <= target) return `translateY(${-drag.height}px)`;
+    if (target <= index && index < drag.index) return `translateY(${drag.height}px)`;
+    return undefined;
+  };
+  return <>
+    <Group title={`Páginas · ${pages.length - hidden.length} de ${pages.length} visíveis · arraste para ordenar`}>
+      <div className="set-row set-row-fixed"><span className="set-grip set-grip-off" aria-hidden="true" /><div className="set-text"><span className="set-title">{pageNames.home}</span><span className="set-desc">Sempre a primeira.</span></div></div>
+      {pages.map((page, index) => <div key={page} className="set-row set-page" data-off={hidden.includes(page) || undefined} data-dragging={drag?.index === index || undefined}
+        style={{ transform: drag?.index === index ? `translateY(${drag.dy}px)` : shift(index) }}>
+        <button type="button" className="set-grip" aria-label={`Mover ${pageNames[page]} (setas)`} onPointerDown={grab(index)} onKeyDown={keys(index)}><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.4" /><circle cx="15" cy="6" r="1.4" /><circle cx="9" cy="12" r="1.4" /><circle cx="15" cy="12" r="1.4" /><circle cx="9" cy="18" r="1.4" /><circle cx="15" cy="18" r="1.4" /></svg></button>
+        <div className="set-text"><span className="set-title">{pageNames[page]}</span>{pageHints[page] && <span className="set-desc">{pageHints[page]}</span>}</div>
+        <div className="set-control"><Toggle label={`Mostrar ${pageNames[page]}`} on={!hidden.includes(page)} onChange={on => toggle(page, on)} /></div>
+      </div>)}
+    </Group>
+    <Group title="No notch fechado">
+      <Row title="Música tocando" desc="Barras e faixa no notch; também alimenta a página Player."><Toggle label="Música tocando" on={modules.media !== false} onChange={media => settings.edit({ ...settings.draft, modules: { ...modules, media } })} /></Row>
+      <Row title="Clima" desc={`Temperatura ao lado do relógio · ${settings.draft.weatherLocation?.city ?? "local não configurado"}.`}><Toggle label="Clima" on={modules.weather !== false} onChange={weather => settings.edit({ ...settings.draft, modules: { ...modules, weather } })} /></Row>
+      <Row title="Avisos do WhatsApp" desc={notificationStatus === "denied" ? "O Windows negou o acesso aos avisos: Configurações › Privacidade › Notificações." : <>Chegam pelo Vincular ao Celular. No Windows, deixe ligados os avisos do WhatsApp em <b>Configurações › Sistema › Notificações</b>.</>}><Toggle label="Avisos do WhatsApp" on={modules.notifications !== false} onChange={notifications => settings.edit({ ...settings.draft, modules: { ...modules, notifications } })} /></Row>
+      <Row title="Ocultar em tela cheia" desc="Some durante jogos, vídeos e apresentações."><Toggle label="Ocultar em tela cheia" on={modules.hideInFullscreen !== false} onChange={hideInFullscreen => settings.edit({ ...settings.draft, modules: { ...modules, hideInFullscreen } })} /></Row>
+    </Group>
+  </>;
 }
 
 const dayNames = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -169,6 +186,101 @@ export function WaterSection({ notes }: { notes?: NotesControl }) {
       </Row>
       <Row title="Dias" wide><span className="set-options" role="group" aria-label="Dias com lembrete">{dayNames.map((name, day) => <button key={day} type="button" className="set-chip" aria-pressed={settings.days.includes(day)} onClick={() => notes.setWater({ days: settings.days.includes(day) ? settings.days.filter(item => item !== day) : [...settings.days, day].sort() })}>{name}</button>)}</span></Row>
       <Row title={`Soneca de ${SNOOZE_MIN} min`} desc="Ao recusar, o lembrete volta em 15 min. Desligada, o gole é pulado e a meta é redistribuída."><Toggle label="Soneca" on={settings.snooze} onChange={snooze => notes.setWater({ snooze })} /></Row>
+    </Group>
+  </>;
+}
+
+/** Esportes: modalidade → competições; times por competição com busca; chave do PandaScore. Salva na hora. */
+export function SportsSection({ sports, bridge }: { sports?: SportsControl; bridge: ShellBridge }) {
+  const [kind, setKind] = useState("Futebol");
+  const [league, setLeague] = useState("");
+  const [teams, setTeams] = useState<TeamOption[] | null>(null);
+  const [teamsError, setTeamsError] = useState("");
+  const [query, setQuery] = useState("");
+  const [token, setToken] = useState("");
+  const [tokenStatus, setTokenStatus] = useState("");
+  const config = sports?.config;
+  const chosen = config?.leagues ?? [];
+  useEffect(() => { if ((!league || !chosen.includes(league)) && chosen.length) setLeague(chosen[0]); }, [chosen.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!league || !bridge.getLeagueTeams) return;
+    let active = true; setTeams(null); setTeamsError("");
+    bridge.getLeagueTeams(league).then(list => { if (active) setTeams(list); }).catch(reason => { if (active) setTeamsError(typeof reason === "string" ? reason : "Não foi possível listar os times."); });
+    return () => { active = false; };
+  }, [league, bridge]);
+  if (!sports?.available || !config) return <p className="settings-status">Esportes indisponíveis.</p>;
+  const groups = sports.catalog.reduce<Record<string, [string, string][]>>((all, [id, name, group]) => ({ ...all, [group]: [...(all[group] ?? []), [id, name]] }), {});
+  const nameOf = (id: string) => sports.catalog.find(item => item[0] === id)?.[1] ?? id;
+  const toggleLeague = (id: string) => void sports.save(chosen.includes(id) ? chosen.filter(item => item !== id) : [...chosen, id], config.teams);
+  const toggleTeam = (id: string) => { const key = `${league}|${id}`; void sports.save(chosen, config.teams.includes(key) ? config.teams.filter(item => item !== key) : [...config.teams, key]); };
+  const saveToken = (value: string) => sports.save(chosen, config.teams, value).then(() => { setToken(""); setTokenStatus(value ? "Chave salva." : "Chave removida."); }).catch(() => setTokenStatus("Chave recusada. Confira e tente de novo."));
+  const filtered = (teams ?? []).filter(team => team.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const followed = (id: string) => config.teams.filter(key => key.startsWith(`${id}|`)).length;
+  return <>
+    <Group title="Competições">
+      <div className="set-block">
+        <span className="set-options">{Object.keys(groups).map(name => { const count = groups[name].filter(([id]) => chosen.includes(id)).length; return <button key={name} type="button" className="set-chip set-tab" aria-pressed={kind === name} onClick={() => setKind(name)}>{name}{count ? <i className="set-count">{count}</i> : null}</button>; })}</span>
+        <span className="set-options set-grid">{(groups[kind] ?? []).map(([id, name]) => <button key={id} type="button" className="set-pick" aria-pressed={chosen.includes(id)} onClick={() => toggleLeague(id)}><span className="set-check" aria-hidden="true" />{name}</button>)}</span>
+      </div>
+    </Group>
+    <Group title="Times seguidos">
+      {chosen.length ? <div className="set-block">
+        <span className="set-options">{chosen.map(id => <button key={id} type="button" className="set-chip set-tab" aria-pressed={league === id} onClick={() => { setLeague(id); setQuery(""); }}>{nameOf(id)}{followed(id) ? <i className="set-count">{followed(id)}</i> : null}</button>)}</span>
+        <input className="set-input set-search" aria-label="Buscar time" placeholder={`Buscar time em ${nameOf(league)}`} value={query} onChange={event => setQuery(event.target.value)} />
+        <span className="set-options set-grid">
+          {teamsError ? <span className="set-desc">{teamsError}</span> : !teams ? <span className="set-desc hd-shimmer">Carregando times…</span>
+            : filtered.length ? filtered.slice(0, 60).map(team => <button key={team.id} type="button" className="set-pick" aria-pressed={config.teams.includes(`${league}|${team.id}`)} onClick={() => toggleTeam(team.id)}>{team.logo ? <img src={team.logo} alt="" /> : <span className="set-check" aria-hidden="true" />}{team.name}</button>)
+            : <span className="set-desc">Nenhum time com esse nome.</span>}
+        </span>
+      </div> : <div className="set-block"><span className="set-desc">Escolha uma competição acima para seguir times dela.</span></div>}
+    </Group>
+    <Group title="Chave do PandaScore">
+      <Row title="CS2, Valorant, LoL e Dota" desc={<>Grátis em pandascore.co. A chave fica só neste computador.{tokenStatus && <b className="set-note"> {tokenStatus}</b>}</>} wide>
+        <span className="set-inline set-grow">
+          <input className="set-input set-grow" type="password" aria-label="Chave do PandaScore" placeholder={config.hasToken ? "Chave salva · cole outra para trocar" : "Cole a chave"} value={token} onChange={event => setToken(event.target.value.trim())} onKeyDown={event => { if (event.key === "Enter" && token) { event.preventDefault(); void saveToken(token); } }} />
+          <button type="button" className="set-button set-primary" disabled={!token} onClick={() => void saveToken(token)}>Salvar</button>
+          {config.hasToken && <button type="button" className="set-button" onClick={() => void saveToken("")}>Remover</button>}
+        </span>
+      </Row>
+    </Group>
+  </>;
+}
+
+const feedColors = ["#4285F4", "#34A853", "#FBBC05", "#EA4335", "#A142F4", "#FF8A1F"];
+/** Agendas assinadas por link ICS (só leitura) e como achar o link em cada serviço. */
+export function CalendarsSection({ calendars }: { calendars?: CalendarsControl }) {
+  const [name, setName] = useState("");
+  const [url, setUrl] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  if (!calendars) return <p className="settings-status">Agendas indisponíveis.</p>;
+  const keep = calendars.feeds.map(feed => ({ id: feed.id, name: feed.name, color: feed.color }));
+  const run = (inputs: Parameters<CalendarsControl["save"]>[0], done: string) => { setStatus("Salvando…"); calendars.save(inputs).then(() => { setStatus(done); setName(""); setUrl(""); }).catch(error => setStatus(String(error?.message ?? error))); };
+  const add = () => {
+    if (!url.trim()) return;
+    const color = feedColors.find(color => !calendars.feeds.some(feed => feed.color === color)) ?? feedColors[0];
+    run([...keep, { id: `f${Date.now().toString(36)}`, name: name.trim(), color, url: url.trim() }], "Agenda adicionada. Os eventos chegam em alguns segundos.");
+  };
+  return <>
+    <Group title="Agendas assinadas">
+      {calendars.feeds.length ? calendars.feeds.map(feed => <div key={feed.id} className="set-row">
+        <span className="set-dot" style={{ background: feed.color }} aria-hidden="true" />
+        <div className="set-text"><span className="set-title">{feed.name}</span><span className="set-desc">{feed.host} · atualiza a cada 15 min</span></div>
+        <div className="set-control"><button type="button" className="set-button" onClick={() => run(keep.filter(item => item.id !== feed.id), "Agenda removida.")}>Remover</button></div>
+      </div>) : <div className="set-block"><span className="set-desc">Nenhuma agenda ainda. Os compromissos criados no notch continuam funcionando.</span></div>}
+      {calendars.errors.length > 0 && <div className="set-block"><span className="set-desc set-warn">{calendars.errors.join(" · ")}</span></div>}
+    </Group>
+    <Group title="Adicionar agenda">
+      <div className="set-block set-form">
+        <label className="set-field"><span>Nome</span><input className="set-input" placeholder="Trabalho" maxLength={40} value={name} onChange={event => setName(event.target.value)} /></label>
+        <label className="set-field set-grow"><span>Link ICS</span><input className="set-input" placeholder="https://… ou webcal://…" value={url} onChange={event => setUrl(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); add(); } }} /></label>
+        <button type="button" className="set-button set-primary" disabled={!url.trim()} onClick={add}>Assinar</button>
+      </div>
+      {status && <div className="set-block"><span className="set-desc" role="status">{status}</span></div>}
+    </Group>
+    <Group title="Onde achar o link">
+      <Row title="Google Agenda" desc={<>Configurações da agenda › Integrar agenda › <b>Endereço secreto no formato iCal</b>. Link de compartilhamento também serve.</>}><span /></Row>
+      <Row title="iCloud" desc={<>App Calendário › Compartilhar › <b>Calendário público</b> › copiar link.</>}><span /></Row>
+      <Row title="Outlook" desc={<>Configurações › Calendário › Calendários compartilhados › <b>Publicar</b> › link ICS.</>}><span /></Row>
     </Group>
   </>;
 }

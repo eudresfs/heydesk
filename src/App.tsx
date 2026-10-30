@@ -23,6 +23,7 @@ import { fileSize, useShelf } from "./modules/context/useShelf";
 import { clock as recClock, recordedMs, useRecorder } from "./modules/prompter/useRecorder";
 import { PrompterGrip } from "./modules/prompter/PrompterPage";
 import { Tooltips } from "./components/Tooltips";
+import { useMascotGaze } from "./modules/context/useMascotGaze";
 import { glowPresets } from "./modules/context/ContextPages";
 import { defaultMascot, defaultSounds } from "./lib/shellBridge";
 import { playSound, soundCategory, type SoundKind } from "./modules/sound/sounds";
@@ -248,7 +249,9 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const hour = new Date().getHours(), night = hour >= 22 || hour < 6;
   const compactExpression: MascotExpression = activity ? (glance ? "wide" : activity.mood)
     : resting ? "sleep" : presence.phase === "drowsy" ? "yawn" : island.hovered || presence.phase !== "context" ? "wide" : playing ? "happy" : night ? "sleepy" : "normal";
-  const compactLook = activity && glance ? { x: -3.5, y: 0 } : presence.look;
+  // Ao acordar e de vez em quando, os olhos acompanham o cursor por alguns segundos.
+  const gaze = useMascotGaze(bridge, presence.phase, settings.loadState === "ready" && !island.expanded && !away && !reducedMotion && settings.draft.mascot?.look !== false);
+  const compactLook = activity && glance ? { x: -3.5, y: 0 } : gaze ?? presence.look;
   // Faixa nova: o mascote sai pelo topo, banda e música ocupam o centro e ele volta.
   const trackShow = activity?.kind === "track" ? activity : null;
   const [mascotBack, setMascotBack] = useState(0);
@@ -365,7 +368,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       </form>
       <nav className="page-ticks" aria-label="Ações do painel">
         <button type="button" className="pin-button" aria-label="Fixar painel aberto" aria-pressed={pinned} onClick={() => setPinned(value => !value)}><svg width="12" height="12" viewBox="0 0 24 24" fill={pinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 6 4 4H6l4-4z" /></svg></button>
-        <button type="button" ref={preferencesButton} className="preferences-trigger" data-preferences-trigger="" aria-label="Preferências" aria-haspopup="menu" aria-expanded={menuOpen} aria-current={preferences ? "page" : undefined} onClick={event => { if (bridge.openSettings) { void bridge.openSettings("appearance").catch(() => setMenuOpen(true)); return; } menuKeyboard.current = event.detail === 0; setMenuOpen(value => !value); }}>
+        <button type="button" ref={preferencesButton} className="preferences-trigger" data-preferences-trigger="" aria-label="Preferências" aria-haspopup="menu" aria-expanded={menuOpen} aria-current={preferences ? "page" : undefined} onClick={event => { if (bridge.openSettings) { void bridge.openSettings(page === "water" ? "waterPrefs" : page === "sports" ? "sportsPrefs" : page === "agenda" ? "calendarPrefs" : "appearance").catch(() => setMenuOpen(true)); return; } menuKeyboard.current = event.detail === 0; setMenuOpen(value => !value); }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
           {settings.dirty && <i className="unsaved-dot" />}
         </button>
