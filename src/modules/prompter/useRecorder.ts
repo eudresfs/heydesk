@@ -51,6 +51,9 @@ export function useRecorder(bridge: ShellBridge) {
     if (countdown != null) { window.clearInterval(timer.current); setCountdown(null); void bridge.countdownOverlay?.(false).catch(() => {}); return; }
     // Novo início limpa o erro anterior (o local e o que veio do Rust).
     setError(null); setState(current => current.state === "error" ? { ...current, state: "idle", error: null } : current);
+    // Durante a contagem: lista os microfones (e o Rust aquece a captura pela GPU).
+    // Sem escolha salva, grava com o primeiro microfone, mesmo sem abrir as opções.
+    const ready = (bridge.recorderCapabilities?.() ?? Promise.resolve(null)).catch(() => null);
     let left = 3;
     setCountdown(left);
     void bridge.countdownOverlay?.(true).catch(() => {});
@@ -60,7 +63,12 @@ export function useRecorder(bridge: ShellBridge) {
       window.clearInterval(timer.current);
       setCountdown(null);
       void bridge.countdownOverlay?.(false).catch(() => {});
-      bridge.recorderStart?.(options).then(setState).catch(fail);
+      void ready.then(found => {
+        if (found) setCaps(found);
+        const microphone = options.microphone ?? found?.microphones[0];
+        if (microphone !== options.microphone) setOptions({ microphone });
+        return bridge.recorderStart?.({ ...options, microphone });
+      }).then(next => { if (next) setState(next); }).catch(fail);
     }, 1000);
   };
   const control = (action: "pause" | "resume" | "stop") => { bridge.recorderControl?.(action).then(setState).catch(fail); };
