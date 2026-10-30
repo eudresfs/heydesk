@@ -22,18 +22,58 @@ export function csSide(live: CsLive | null | undefined, team: { name: string; sh
 }
 /** CS2 ao vivo: placar de rounds do mapa atual (mandante–visitante) e o nome do mapa.
  * Prefere a página da partida (HLTV, com nome do mapa); sem ela, o mapa ao vivo da lista. */
+/** Placar final de mapa (MR12: 13 com o outro ≤ 11; prorrogação: 16, 19… com 2 de vantagem).
+ * Entre um mapa e outro a página do HLTV ainda mostra o placar do mapa que acabou. */
+export function csFinished(live: CsLive | null | undefined) {
+  if (!live) return false;
+  const high = Math.max(live.ctScore, live.tScore), low = Math.min(live.ctScore, live.tScore);
+  return (high === 13 && low <= 11) || (high > 13 && (high - 13) % 3 === 0 && high - low >= 2);
+}
+/** Placares finais vistos por jogo e mapa (índice na série), para os mapas encerrados. */
+const finishedMaps = new Map<string, Map<number, { name: string; home: number; away: number }>>();
+export function csFinishedMap(game: SportGame, index: number) { return finishedMaps.get(game.id)?.get(index) ?? null; }
+
 export function csMapScore(game: SportGame, live: CsLive | null | undefined): { home: number; away: number; map: string } | null {
   if (game.state !== "in") return null;
   const index = game.maps?.findIndex(map => map.result === "live") ?? -1;
-  if (live && live.gameId === game.id) {
+  if (live && live.gameId === game.id && csFinished(live)) {
+    // O placar final vai para o último mapa encerrado; o mapa novo usa o placar da lista.
+    const homeCt = csSide(live, game.home) === "CT";
+    const done = (game.maps ?? []).filter(map => map.result !== "live" && map.result !== "pending").length;
+    if (done > 0) {
+      const byGame = finishedMaps.get(game.id) ?? new Map();
+      byGame.set(done - 1, { name: live.map, home: homeCt ? live.ctScore : live.tScore, away: homeCt ? live.tScore : live.ctScore });
+      finishedMaps.set(game.id, byGame);
+    }
+  } else if (live && live.gameId === game.id) {
     const homeCt = csSide(live, game.home) === "CT";
     return { home: homeCt ? live.ctScore : live.tScore, away: homeCt ? live.tScore : live.ctScore, map: live.map || (index >= 0 ? `Mapa ${index + 1}` : "") };
   }
   const map = index >= 0 ? game.maps![index] : null;
   if (!map || map.homeRounds == null || map.awayRounds == null) return null;
-  return { home: map.homeRounds, away: map.awayRounds, map: map.name ?? `Mapa ${index + 1}` };
+  // A lista também pode ainda mostrar o placar final do mapa anterior: o novo começa em 0–0.
+  const stale = csFinished({ ctScore: map.homeRounds, tScore: map.awayRounds } as CsLive);
+  return { home: stale ? 0 : map.homeRounds, away: stale ? 0 : map.awayRounds, map: map.name ?? `Mapa ${index + 1}` };
 }
-export interface CsLive { gameId: string; map: string; round: number; ctTeam: string; tTeam: string; ctScore: number; tScore: number; phase: string; history: CsRound[] }
+export interface CsLive { gameId: string; map: string; round: number; ctTeam: string; tTeam: string; ctScore: number; tScore: number; phase: string; history: CsRound[]; streams?: CsStream[] }
+/** Transmissão listada pelo HLTV (embed pronto: YouTube, Twitch ou Kick). */
+export interface CsStream { name: string; provider: string; country: string; viewers: string; embed: string }
+const viewersOf = (text: string) => { const value = parseFloat(text.replace(",", ".")); return Number.isFinite(value) ? value * (/k/i.test(text) ? 1000 : /m/i.test(text) ? 1_000_000 : 1) : 0; };
+/** Canal para abrir primeiro: o brasileiro mais assistido; sem canal BR, o mais assistido. */
+export function bestStream(streams: CsStream[] = []): CsStream | null {
+  const ranked = [...streams].sort((a, b) => viewersOf(b.viewers) - viewersOf(a.viewers));
+  return ranked.find(stream => stream.country === "Brazil") ?? ranked[0] ?? null;
+}
+/** Embed para o PiP: Twitch exige o domínio de quem incorpora; sempre começa sem som. */
+export function embedUrl(embed: string) {
+  try {
+    const url = new URL(embed);
+    if (url.hostname === "player.twitch.tv") { url.searchParams.set("parent", location.hostname || "tauri.localhost"); url.searchParams.set("muted", "true"); }
+    if (url.hostname.endsWith("youtube.com")) { url.searchParams.set("mute", "1"); url.searchParams.set("autoplay", "1"); }
+    if (url.hostname === "player.kick.com") { url.searchParams.set("muted", "true"); url.searchParams.set("autoplay", "true"); }
+    return url.toString();
+  } catch { return embed; }
+}
 
 /** Próximo aviso antes do jogo: 30 e 5 minutos antes do início. */
 export function kickoffAlert(game: SportGame, now: number): 30 | 5 | null {
@@ -102,10 +142,17 @@ export function useSports(bridge: ShellBridge, enabled: boolean) {
     void bridge.onDesktopEvent("hltv:live", payload => setCsLive((payload as CsLive | null) ?? null)).then(fn => { if (alive) stop = fn; else fn(); });
     return () => { alive = false; stop?.(); };
   }, [bridge, enabled]);
-  return { snapshot: view, config, catalog, save, pinned, togglePin, csLive, csStatus, available: Boolean(bridge.desktop && bridge.getSports) };
+  const watch = useCallback((embed: string | null) => { void bridge.streamPip?.(embed).catch(() => {}); }, [bridge]);
+  return { snapshot: view, config, catalog, save, pinned, togglePin, csLive, csStatus, watch, available: Boolean(bridge.desktop && bridge.getSports) };
 }
 export type SportsControl = ReturnType<typeof useSports>;
 
+/** Como cada esporte chama o que mudou o placar: mapa (e-sports), gol (futebol), ponto (resto). */
+export function scoreLabel(league: string, team: string) {
+  if (/^(hltv|bo3|panda):/.test(league)) return `Mapa para ${team}`;
+  if (/soccer|futebol/i.test(league)) return `Gol de ${team}`;
+  return `Ponto de ${team}`;
+}
 /** Placar que mudou em jogo seguido vira aviso; o mascote comemora gol do time seguido. */
 export function sportsActivities(previous: SportsSnapshot | null, next: SportsSnapshot | null, now: number, followedTeams: string[]): ActivityInput[] {
   if (!previous || !next) return [];
@@ -117,8 +164,11 @@ export function sportsActivities(previous: SportsSnapshot | null, next: SportsSn
     if (before && game.state === "in" && (before.home.score !== game.home.score || before.away.score !== game.away.score)) {
       const homeUp = Number(game.home.score ?? 0) > Number(before.home.score ?? 0);
       const scorer = homeUp ? game.home : game.away;
+      // Humor: feliz se foi o time seguido; preocupado só se foi o adversário dele;
+      // jogo só acompanhado (nenhum dos dois seguido) fica neutro.
       const ours = followedTeams.includes(`${game.league}|${scorer.id}`);
-      found.push({ kind: "score", group: "sport", icon: "ball", value: scoreline, label: `Ponto de ${scorer.name}`, priority: 4, durationMs: 6000, width: 320, mood: ours ? "happy" : "worried", tone: ours ? "ok" : "neutral" });
+      const rival = !ours && followedTeams.includes(`${game.league}|${(homeUp ? game.away : game.home).id}`);
+      found.push({ kind: "score", group: "sport", icon: "ball", value: scoreline, label: scoreLabel(game.league, scorer.name), priority: 4, durationMs: 6000, width: 320, mood: ours ? "happy" : rival ? "worried" : "wide", tone: ours ? "ok" : "neutral" });
     }
     const alert = kickoffAlert(game, now);
     const already = before && kickoffAlert(before, previous.observedAt ?? now - 30_000) === alert;

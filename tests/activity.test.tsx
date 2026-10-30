@@ -5,7 +5,7 @@ import { isTickle } from "../src/modules/context/useMascotTouch";
 import { dueReminders, parseEventText } from "../src/modules/context/useNotes";
 import { orderPages } from "../src/modules/context/ContextPages";
 import { waterCopy, waterPlan } from "../src/modules/context/waterPlan";
-import { kickoffAlert, sportsActivities, type SportGame } from "../src/modules/sports/useSports";
+import { csFinished, csFinishedMap, csMapScore, kickoffAlert, scoreLabel, sportsActivities, type SportGame } from "../src/modules/sports/useSports";
 import type { DesktopSnapshot, Water } from "../src/modules/context/types";
 
 const snapshot = (battery: Partial<NonNullable<DesktopSnapshot["battery"]>>, media: DesktopSnapshot["media"] = null): DesktopSnapshot => ({
@@ -132,4 +132,29 @@ test("ordem das páginas: Início sempre primeiro e páginas novas na posição 
   const pages = ["home", "media", "sports", "tasks", "water"] as const;
   assert.deepEqual(orderPages(pages, []), ["home", "media", "sports", "tasks", "water"]);
   assert.deepEqual(orderPages(pages, ["water", "tasks", "home"]), ["home", "water", "tasks", "media", "sports"]);
+});
+
+test("placar de jogo acompanhado: mapa no CS2, gol no futebol e mascote neutro sem time seguido", () => {
+  const side = (id: string, name: string, score: string) => ({ id, name, short: name.slice(0, 4).toUpperCase(), logo: null, score });
+  const game = (league: string, home: string, away: string) => ({ id: `${league}|1`, league, leagueName: "X", start: 0, state: "in" as const, detail: "", clock: null, home: side("1", "MOUZ", home), away: side("2", "FURIA", away), followed: true });
+  const before = { games: [game("hltv:cs2", "0", "0")], observedAt: 0, errors: [] };
+  const after = { games: [game("hltv:cs2", "1", "0")], observedAt: 1, errors: [] };
+  const [alert] = sportsActivities(before, after, 1, []);
+  assert.equal(alert.label, "Mapa para MOUZ");
+  assert.equal(alert.mood, "wide", "jogo só acompanhado não deixa o mascote preocupado");
+  assert.equal(sportsActivities(before, after, 1, ["hltv:cs2|2"])[0].mood, "worried", "mapa do adversário do time seguido");
+  assert.equal(sportsActivities(before, after, 1, ["hltv:cs2|1"])[0].mood, "happy");
+  assert.equal(scoreLabel("espn:soccer/bra.1", "Bahia"), "Gol de Bahia");
+});
+
+test("troca de mapa no CS2: placar final vai para o mapa encerrado e o novo começa em 0–0", () => {
+  const side = (id: string, name: string, score: string) => ({ id, name, short: name, logo: null, score });
+  const game = { id: "hltv:cs2|9", league: "hltv:cs2", leagueName: "PGL", start: 0, state: "in" as const, detail: "MD3", clock: null, home: side("1", "MOUZ", "0"), away: side("2", "FURIA", "1"), followed: true,
+    maps: [{ name: null, result: "done" as const, homeRounds: null, awayRounds: null }, { name: null, result: "live" as const, homeRounds: 6, awayRounds: 13 }, { name: null, result: "pending" as const, homeRounds: null, awayRounds: null }] };
+  const live = { gameId: "hltv:cs2|9", map: "Dust2", round: 19, ctTeam: "FURIA", tTeam: "MOUZ", ctScore: 13, tScore: 6, phase: "", history: [] };
+  assert.equal(csFinished(live), true);
+  assert.deepEqual(csMapScore(game, live), { home: 0, away: 0, map: "Mapa 2" });
+  assert.deepEqual(csFinishedMap(game, 0), { name: "Dust2", home: 6, away: 13 });
+  assert.equal(csFinished({ ...live, ctScore: 12, tScore: 10 }), false);
+  assert.equal(csFinished({ ...live, ctScore: 16, tScore: 14 }), true, "fim da prorrogação");
 });

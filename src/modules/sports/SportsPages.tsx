@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
-import { csMapScore, csSide, kickoffLabel, type CsLive, type SportGame, type SportsControl, type TeamOption } from "./useSports";
+import { bestStream, csFinished, csFinishedMap, csMapScore, csSide, kickoffLabel, type CsLive, type SportGame, type SportsControl, type TeamOption } from "./useSports";
 import { Digits } from "../ui/Digits";
 
 function Logo({ src, size = 28, name }: { src: string | null; size?: number; name: string }) {
@@ -35,7 +35,8 @@ const roundGlyph: Record<string, [string, string]> = {
 const sameTeam = (a: string, b: string) => { const clean = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, ""); const x = clean(a), y = clean(b); return !!x && !!y && (x === y || (x.length >= 4 && y.includes(x)) || (y.length >= 4 && x.includes(y))); };
 
 /** CS2 ao vivo (HLTV): lado de cada time, round atual e os últimos 5 rounds com o motivo. */
-function CsRounds({ game, live }: { game: SportGame; live: CsLive }) {
+function CsRounds({ game, live, onWatch }: { game: SportGame; live: CsLive; onWatch?(embed: string): void }) {
+  const stream = bestStream(live.streams);
   const homeCt = sameTeam(live.ctTeam, game.home.name) || sameTeam(live.ctTeam, game.home.short);
   const side = (home: boolean) => (home === homeCt ? "CT" : "TR");
   const last = live.history.slice(-5);
@@ -44,13 +45,13 @@ function CsRounds({ game, live }: { game: SportGame; live: CsLive }) {
     <span className="cs-last">{last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.team || (round.winner === "CT" ? live.ctTeam : live.tTeam);
       return <span key={round.round} className="cs-round" data-side={round.winner} title={`R${round.round}: ${team} (${round.winner === "CT" ? "CT" : "TR"}) · ${label}`} aria-label={`Round ${round.round}: ${team}, ${label}`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg></span>; })}
       {!last.length && <span className="cs-wait">aguardando rounds</span>}</span>
-    <span className="cs-edge cs-edge-end"><span className="cs-side" data-side={side(false)}>{side(false)}</span></span>
+    <span className="cs-edge cs-edge-end">{stream && onWatch && <button type="button" className="cs-watch" title={`Assistir ${stream.name} em PiP`} onClick={() => onWatch(stream.embed)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Assistir</button>}<span className="cs-side" data-side={side(false)}>{side(false)}</span></span>
   </div>;
 }
 
 /** Placar do mapa ao vivo pelo HLTV (mandante–visitante), quando o mapa é o mesmo. */
 function liveScore(game: SportGame, map: { name: string | null }, live?: CsLive | null) {
-  if (!live || live.gameId !== game.id || (map.name && live.map && map.name.toLowerCase() !== live.map.toLowerCase())) return null;
+  if (!live || live.gameId !== game.id || csFinished(live) || (map.name && live.map && map.name.toLowerCase() !== live.map.toLowerCase())) return null;
   const homeCt = csSide(live, game.home) === "CT";
   return homeCt ? `${live.ctScore}–${live.tScore}` : `${live.tScore}–${live.ctScore}`;
 }
@@ -58,7 +59,7 @@ function liveScore(game: SportGame, map: { name: string | null }, live?: CsLive 
 // Por que não há rounds ao vivo (CS2 acompanhado): procurando, fora do HLTV, verificação.
 const csNote: Partial<Record<string, string>> = { searching: "Procurando a partida no HLTV…", missing: "Rounds ao vivo indisponíveis: esta partida não está no HLTV.", blocked: "HLTV pediu verificação; rounds ao vivo pausados por 30 min." };
 
-function Scoreboard({ game, onPin, live, note }: { game: SportGame; onPin(id: string): void; live?: CsLive | null; note?: string }) {
+function Scoreboard({ game, onPin, live, note, onWatch }: { game: SportGame; onPin(id: string): void; live?: CsLive | null; note?: string; onWatch?(embed: string): void }) {
   const rounds = csMapScore(game, live);
   return <div className="scoreboard hd-enter">
     <div className="scoreboard-head"><span>{game.leagueName}</span><span className="scoreboard-actions"><PinButton game={game} onToggle={onPin} />{status(game)}</span></div>
@@ -72,12 +73,13 @@ function Scoreboard({ game, onPin, live, note }: { game: SportGame; onPin(id: st
       </div>
       <div className="score-team away"><span className="score-team-name"><strong title={game.away.name}>{game.away.name}</strong>{game.away.short !== game.away.name && <small>{game.away.short}</small>}</span><Logo src={game.away.logo} size={34} name={game.away.name} /></div>
     </div>
-    {live && live.gameId === game.id ? <CsRounds game={game} live={live} /> : note && <p className="cs-note">{note}</p>}
+    {live && live.gameId === game.id ? <CsRounds game={game} live={live} onWatch={onWatch} /> : note && <p className="cs-note">{note}</p>}
     {game.maps && game.maps.length > 0 && <div className="map-strip" aria-label="Mapas da série">{game.maps.map((map, index) => <div key={index} className="map-chip" data-result={map.result}>
-      <span className="map-name">{map.name ?? (map.result === "live" && live?.gameId === game.id && live.map ? live.map : `Mapa ${index + 1}`)}</span>
+      <span className="map-name">{map.name ?? (map.result === "live" && live?.gameId === game.id && live.map && !csFinished(live) ? live.map : csFinishedMap(game, index)?.name || `Mapa ${index + 1}`)}</span>
       {map.result === "live" ? <span className="map-live"><span className="live-dot" />{liveScore(game, map, live) ?? (map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo")}</span>
         : map.homeRounds != null && map.awayRounds != null ? <span className="map-score"><b data-win={map.result === "home" || undefined}>{map.homeRounds}</b>–<b data-win={map.result === "away" || undefined}>{map.awayRounds}</b></span>
-        : map.result === "pending" ? <span className="map-pending">a jogar</span> : map.result === "done" ? <span className="map-pending">encerrado</span> : <span className="map-score">{map.result === "home" ? game.home.short : game.away.short}</span>}
+        : map.result === "pending" ? <span className="map-pending">a jogar</span>
+        : map.result === "done" ? (final => final ? <span className="map-score"><b data-win={final.home > final.away || undefined}>{final.home}</b>–<b data-win={final.away > final.home || undefined}>{final.away}</b></span> : <span className="map-pending">encerrado</span>)(csFinishedMap(game, index)) : <span className="map-score">{map.result === "home" ? game.home.short : game.away.short}</span>}
     </div>)}</div>}
   </div>;
 }
@@ -108,7 +110,7 @@ export function SportsPage({ sports, onConfigure }: { sports?: SportsControl; on
   const list = (next.length ? next : games.filter(game => game !== live)).slice(0, live ? (rounds ? 0 : live.maps?.length ? 1 : 2) : 4);
   const error = sports.snapshot?.errors[0];
   return <div className="sports-page">
-    {live && <Scoreboard game={live} onPin={sports.togglePin} live={sports.csLive} note={sports.csStatus?.gameId === live.id ? csNote[sports.csStatus.state] : undefined} />}
+    {live && <Scoreboard game={live} onPin={sports.togglePin} onWatch={sports.watch} live={sports.csLive} note={sports.csStatus?.gameId === live.id ? csNote[sports.csStatus.state] : undefined} />}
     {list.length ? <ul className="game-list">{list.map((game, index) => <Row key={game.id} game={game} index={index} onPin={sports.togglePin} />)}</ul>
       : !live && <p className="context-note">{sports.snapshot ? "Sem jogos hoje nem nos próximos 3 dias." : "Buscando jogos…"}</p>}
     {error && <p className="sports-error" role="status">{error}</p>}
