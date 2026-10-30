@@ -56,20 +56,25 @@ pub fn watch_displays(window: WebviewWindow) {
         // Lido direto do Win32 nesta thread: `primary_monitor()` do Tauri passa pela
         // thread principal, e isto roda a cada segundo o dia todo.
         #[cfg(windows)]
-        let signature = |_: &WebviewWindow| unsafe {
-            use ::windows::Win32::{Foundation::POINT, Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MONITORINFO, MONITOR_DEFAULTTOPRIMARY}, UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI}};
+        // A tela principal sempre começa em (0,0): um monitor novo de mesma resolução e
+        // DPI parecia "igual". Por isso entram também o número de monitores e se a ilha
+        // está mesmo na tela principal (senão a ilha ficava na tela onde abriu).
+        let signature = |window: &WebviewWindow| unsafe {
+            use ::windows::Win32::{Foundation::{HWND, POINT}, Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY},
+                UI::{HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI}, WindowsAndMessaging::{GetSystemMetrics, SM_CMONITORS}}};
             let monitor = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
             let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
             if !GetMonitorInfoW(monitor, &mut info).as_bool() { return None; }
             let (mut dpi, mut _y) = (0u32, 0u32);
             let _ = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi, &mut _y);
+            let on_primary = window.hwnd().map(|hwnd| MonitorFromWindow(HWND(hwnd.0), MONITOR_DEFAULTTONEAREST) == monitor).unwrap_or(true);
             let (screen, work) = (info.rcMonitor, info.rcWork);
-            Some((screen.left, screen.top, work.left, work.top, work.right - work.left, work.bottom - work.top, dpi as u64))
+            Some((screen.right, screen.bottom, work.left, work.top, work.right - work.left, work.bottom - work.top, dpi as u64, GetSystemMetrics(SM_CMONITORS), on_primary))
         };
         #[cfg(not(windows))]
         let signature = |window: &WebviewWindow| window.primary_monitor().ok().flatten().map(|monitor| {
             let area = monitor.work_area();
-            (monitor.position().x, monitor.position().y, area.position.x, area.position.y, area.size.width as i32, area.size.height as i32, monitor.scale_factor().to_bits())
+            (monitor.position().x, monitor.position().y, area.position.x, area.position.y, area.size.width as i32, area.size.height as i32, monitor.scale_factor().to_bits(), 1, true)
         });
         let mut last = signature(&window);
         let mut hidden_by_fullscreen = false;
@@ -82,8 +87,9 @@ pub fn watch_displays(window: WebviewWindow) {
             if tick % 2 != 0 { continue; }
             let now = signature(&window);
             if now.is_none() || now == last { continue; }
-            last = now;
             if let Err(error) = place_island(&window) { eprintln!("[Heydesk] Falha ao reposicionar a ilha: {error}"); }
+            // Relê depois de mover: a ilha já está na tela principal.
+            last = signature(&window);
         }
     });
     if let Err(error) = spawned { eprintln!("[Heydesk] Falha ao vigiar monitores: {error}"); }
