@@ -1,0 +1,40 @@
+{
+  "name": "heydesk",
+  "private": true,
+  "version": "0.2.0",
+  "license": "MIT",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.tsx",
+    "test:native": "cargo test --manifest-path src-tauri/Cargo.toml --lib --locked",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@crabnebula/tauri-plugin-drag": "^2.1.0",
+    "@tauri-apps/api": "2.12.4",
+    "motion": "^11.18.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.20",
+    "happy-dom": "^21.0.4",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.3",
+    "vite": "^6.4.4"
+  }
+}

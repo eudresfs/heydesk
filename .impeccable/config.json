@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "src/index.css"
+        ],
+        "createdAt": "2026-10-30T01:59:40.558Z",
+        "reason": "Claude: .hd-shimmer is the loading/reasoning shimmer (Kobra reference pattern), a functional loading state, not decorative heading text"
+      }
+    ]
+  }
+}

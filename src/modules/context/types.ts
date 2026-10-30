@@ -1,0 +1,78 @@
+export interface QuotaWindow {
+  id: string;
+  usedPercent: number;
+  remainingPercent: number | null;
+  lastKnownRemainingPercent: number;
+  windowMinutes: number | null;
+  resetsAt: number | null;
+  state: "available" | "stale" | "reset_pending";
+}
+
+export interface CodexQuotaSnapshot {
+  enabled: boolean;
+  providerId: string;
+  providerName: string;
+  state: "available" | "stale" | "unavailable" | "disabled";
+  source: string;
+  observedAt: string | null;
+  windows: QuotaWindow[];
+}
+
+export interface ClaudeLimit {
+  kind: string;
+  group: string;
+  label: string;
+  percent: number;
+  severity: string;
+  /** Época Unix em ms. */
+  resetsAt: number | null;
+  windowMinutes: number | null;
+  active: boolean;
+}
+
+export interface ClaudeQuotaSnapshot {
+  enabled: boolean;
+  state: "available" | "stale" | "unavailable" | "disabled";
+  plan: string | null;
+  observedAt: number | null;
+  limits: ClaudeLimit[];
+  reason: string | null;
+}
+
+export interface DesktopSnapshot {
+  observedAt: string | null;
+  cpuPercent: number | null;
+  memory: { usedBytes: number; totalBytes: number } | null;
+  disk?: { usedBytes: number; totalBytes: number } | null;
+  /** Bytes por segundo nas interfaces físicas ativas. */
+  network?: { downBps: number; upBps: number } | null;
+  /** `plugged` vem da linha AC; em 100% na tomada `charging` é falso. */
+  battery: { percent: number | null; charging: boolean; plugged?: boolean; hasBattery: boolean } | null;
+  media: MediaStatus | null;
+  weather: { state: "ready" | "stale" | "unavailable" | "unconfigured"; city: string | null; temperatureC: number | null; weatherCode: number | null; isDay: boolean | null; observedAt: string | null; source: string } | null;
+}
+
+export interface MediaStatus {
+  state: "playing" | "paused" | "empty" | "unavailable";
+  title: string | null;
+  artist: string | null;
+  source?: string | null;
+  /** Muda quando há capa nova; a imagem vem por `getMediaArt`. */
+  artKey?: string | null;
+  /** Posição no instante `positionAtMs` (época Unix, ms); extrapolar enquanto toca. */
+  positionMs?: number | null;
+  durationMs?: number | null;
+  positionAtMs?: number | null;
+  canPrevious?: boolean;
+  canNext?: boolean;
+  canToggle?: boolean;
+}
+export type MediaAction = "toggle" | "next" | "previous";
+export interface Todo { id: string; text: string; done: boolean; starred: boolean; createdAt: number }
+export interface Drink { at: number; ml: number }
+export interface Water { goalMl: number; cupMl: number; reminders: boolean; intervalMin: number; log: Drink[]; snoozeUntil?: number }
+export interface CalendarEvent { id: string; title: string; at: number; remindMin: number; reminders?: number[] }
+export interface Prompter { text: string; speed: number; size: number; mirror: boolean; opacity?: number; height?: number }
+export interface Notes { note: string; todos: Todo[]; water?: Water; events?: CalendarEvent[]; prompter?: Prompter }
+export interface LyricLine { atMs: number; text: string }
+export interface Lyrics { state: "synced" | "plain" | "instrumental" | "none" | "error"; lines: LyricLine[]; plain: string | null }

@@ -1,0 +1,116 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ShellBridge } from "../../lib/shellBridge";
+import type { CalendarEvent, Notes, Prompter, Todo, Water } from "./types";
+
+export const defaultPrompter: Prompter = { text: "", speed: 4, size: 26, mirror: false, opacity: 100, height: 300 };
+export const defaultWater: Water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [], snoozeUntil: 0 };
+/** Hora de beber: lembretes ligados, 8h–22h, intervalo sem beber vencido e fora do adiamento. */
+export function waterDue(water: Water, now: number) {
+  const hour = new Date(now).getHours();
+  if (!water.reminders || hour < 8 || hour >= 22 || now < (water.snoozeUntil ?? 0)) return false;
+  // Conta do último gole (ou das 8h, sem gole hoje). Não usa a abertura do app:
+  // reiniciar o Heydesk empurrava o lembrete e ele parecia nunca voltar.
+  const morning = new Date(now); morning.setHours(8, 0, 0, 0);
+  return now - Math.max(morning.getTime(), water.log[water.log.length - 1]?.at ?? 0) >= water.intervalMin * 60_000;
+}
+const empty: Notes = { note: "", todos: [], water: defaultWater };
+const dayStart = (now: number) => { const date = new Date(now); date.setHours(0, 0, 0, 0); return date.getTime(); };
+/** Total bebido hoje, em ml. */
+export function waterToday(water: Water, now: number) { const start = dayStart(now); return water.log.filter(drink => drink.at >= start).reduce((sum, drink) => sum + drink.ml, 0); }
+/** Goles de hoje por hora (0–23), em ml. */
+export function waterByHour(water: Water, now: number) { const hours = new Array(24).fill(0) as number[]; const start = dayStart(now); for (const drink of water.log) if (drink.at >= start) hours[new Date(drink.at).getHours()] += drink.ml; return hours; }
+const newId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+
+/** "Reunião 15:30" → título "Reunião" às 15:30 do dia; sem hora, a próxima hora cheia. */
+/** Horário no texto ("15:30", "15h30", "às 9h", "9h") vence; sem ele, vale `time` ("HH:MM"). */
+export function parseEventText(text: string, day: Date, now: number, time?: string) {
+  const match = text.match(/(?:^|\s)(?:às\s+)?(2[0-3]|[01]?\d)(?:[:h]([0-5]\d))?(h)?(?=\s|$)/i);
+  // Número solto sem ":"/"h" ("Reunião 2") não é horário.
+  const timed = match && (match[2] != null || match[3] != null || /às\s/i.test(match[0])) ? match : null;
+  const title = (timed ? text.replace(timed[0], " ") : text).replace(/\s+/g, " ").trim();
+  const at = new Date(day);
+  const field = time?.match(/^(\d{2}):(\d{2})$/);
+  if (timed) at.setHours(Number(timed[1]), Number(timed[2] ?? 0), 0, 0);
+  else if (field) at.setHours(Number(field[1]), Number(field[2]), 0, 0);
+  else { const next = new Date(now); at.setHours(next.getHours() + 1, 0, 0, 0); }
+  return title ? { title: title.slice(0, 140), at: at.getTime() } : null;
+}
+export const defaultReminders = [30, 15];
+const remindersOf = (event: CalendarEvent) => event.reminders ?? (event.remindMin > 0 ? [event.remindMin] : []);
+/** Avisos devidos agora: `remindMin` antes e na hora (janela de 1 minuto). */
+export function dueReminders(events: CalendarEvent[], now: number) {
+  const due: { event: CalendarEvent; kind: "before" | "now"; key: string; minutes: number }[] = [];
+  for (const event of events) {
+    for (const minutes of remindersOf(event)) {
+      const before = event.at - minutes * 60_000;
+      if (minutes > 0 && now >= before && now < before + 60_000) due.push({ event, kind: "before", key: `${event.id}:b${minutes}`, minutes });
+    }
+    if (now >= event.at && now < event.at + 60_000) due.push({ event, kind: "now", key: `${event.id}:n`, minutes: 0 });
+  }
+  return due;
+}
+
+/** Ordem da lista: favoritas primeiro, depois as mais antigas. Concluídas saem da vista. */
+export function pendingTodos(todos: Todo[]) {
+  return todos.filter(todo => !todo.done).sort((a, b) => Number(b.starred) - Number(a.starred) || a.createdAt - b.createdAt);
+}
+
+// Nota grava com atraso (digitação); tarefas gravam a cada mudança. Falha mantém
+// o texto na tela e avisa, sem perder o que foi digitado.
+export function useNotes(bridge: ShellBridge) {
+  const [notes, setNotes] = useState<Notes>(empty);
+  const [state, setState] = useState<"loading" | "ready" | "saving" | "error">("loading");
+  const [error, setError] = useState("");
+  const latest = useRef(notes);
+  const timer = useRef<number>();
+  const persist = useCallback((next: Notes) => {
+    if (!bridge.saveNotes) { setState("ready"); return; }
+    setState("saving");
+    bridge.saveNotes(next).then(() => { if (latest.current === next) { setState("ready"); setError(""); } })
+      .catch(reason => { setState("error"); setError(typeof reason === "string" ? reason : "Não foi possível salvar."); });
+  }, [bridge]);
+  const update = useCallback((next: Notes, delay = 0) => {
+    latest.current = next; setNotes(next);
+    window.clearTimeout(timer.current);
+    if (delay) { setState("saving"); timer.current = window.setTimeout(() => persist(latest.current), delay); }
+    else persist(next);
+  }, [persist]);
+  useEffect(() => {
+    let active = true;
+    if (!bridge.loadNotes) { setState("ready"); return; }
+    bridge.loadNotes().then(value => { if (active) { latest.current = value; setNotes(value); setState("ready"); } })
+      .catch(reason => { if (active) { setState("error"); setError(typeof reason === "string" ? reason : "Não foi possível ler as notas."); } });
+    return () => { active = false; };
+  }, [bridge]);
+  // Sair do app com a nota pendente: grava o que estiver na fila.
+  useEffect(() => () => { if (timer.current) { window.clearTimeout(timer.current); persist(latest.current); } }, [persist]);
+  const current = () => latest.current;
+  return {
+    notes, state, error,
+    setNote: (note: string) => update({ ...current(), note }, 600),
+    prompter: notes.prompter ?? defaultPrompter,
+    /** Texto grava com atraso (digitação); controles na hora. */
+    setPrompter: (patch: Partial<Prompter>) => update({ ...current(), prompter: { ...(current().prompter ?? defaultPrompter), ...patch } }, "text" in patch ? 600 : 0),
+    addTodo: (text: string) => {
+      const clean = text.trim().slice(0, 280);
+      if (!clean) return;
+      update({ ...current(), todos: [...current().todos, { id: newId(), text: clean, done: false, starred: false, createdAt: Date.now() }] });
+    },
+    toggleTodo: (id: string, key: "done" | "starred") => update({ ...current(), todos: current().todos.map(todo => todo.id === id ? { ...todo, [key]: !todo[key] } : todo) }),
+    removeTodo: (id: string) => update({ ...current(), todos: current().todos.filter(todo => todo.id !== id) }),
+    clearDone: () => update({ ...current(), todos: current().todos.filter(todo => !todo.done) }),
+    // Água: o registro guarda 7 dias; o resto sai ao gravar.
+    water: notes.water ?? defaultWater,
+    drink: (ml?: number) => {
+      const water = current().water ?? defaultWater, now = Date.now();
+      update({ ...current(), water: { ...water, snoozeUntil: 0, log: [...water.log.filter(drink => now - drink.at < 7 * 86_400_000), { at: now, ml: ml ?? water.cupMl }] } });
+    },
+    snoozeWater: (minutes: number) => { const water = current().water ?? defaultWater; update({ ...current(), water: { ...water, snoozeUntil: Date.now() + minutes * 60_000 } }); },
+    undoDrink: () => { const water = current().water ?? defaultWater; update({ ...current(), water: { ...water, log: water.log.slice(0, -1) } }); },
+    events: notes.events ?? [],
+    addEvent: (title: string, at: number, reminders: number[] = defaultReminders) => update({ ...current(), events: [...(current().events ?? []).filter(event => event.at > Date.now() - 30 * 86_400_000), { id: newId(), title, at, remindMin: 0, reminders: [...reminders].sort((a, b) => b - a) }].sort((a, b) => a.at - b.at) }),
+    removeEvent: (id: string) => update({ ...current(), events: (current().events ?? []).filter(event => event.id !== id) }),
+    setWater: (patch: Partial<Water>) => update({ ...current(), water: { ...(current().water ?? defaultWater), ...patch } }),
+  };
+}
+export type NotesControl = ReturnType<typeof useNotes>;

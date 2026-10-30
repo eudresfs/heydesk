@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Ícone do Heydesk: o mascote (olhos ovais) sobre a ilha preta, com o brilho do notch. -->
+  <defs>
+    <linearGradient id="glow" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#19b8ff"/>
+      <stop offset=".55" stop-color="#2d5bff"/>
+      <stop offset="1" stop-color="#7b4bff"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="70"/></filter>
+    <filter id="eyeGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="18" result="b1"/>
+      <feFlood flood-color="#78beff" flood-opacity=".9"/><feComposite in2="b1" operator="in" result="g1"/>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="42" result="b2"/>
+      <feFlood flood-color="#508cff" flood-opacity=".55"/><feComposite in2="b2" operator="in" result="g2"/>
+      <feMerge><feMergeNode in="g2"/><feMergeNode in="g1"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="card"><rect x="32" y="32" width="960" height="960" rx="220"/></clipPath>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="#0b0b0d"/>
+  <g clip-path="url(#card)">
+    <ellipse cx="512" cy="900" rx="420" ry="190" fill="url(#glow)" opacity=".75" filter="url(#blur)"/>
+  </g>
+  <g filter="url(#eyeGlow)" fill="#fff">
+    <ellipse cx="336" cy="470" rx="88" ry="135"/>
+    <ellipse cx="688" cy="470" rx="88" ry="135"/>
+  </g>
+  <rect x="32.5" y="32.5" width="959" height="959" rx="219.5" fill="none" stroke="#ffffff" stroke-opacity=".08" stroke-width="3"/>
+</svg>
