@@ -44,7 +44,8 @@ $latest = [ordered]@{
   platforms = @{ "windows-x86_64" = @{ signature = $signature.Trim(); url = "https://github.com/$Repo/releases/download/$tag/$($setup.Name)" } }
 }
 $json = Join-Path $bundle "latest.json"
-$latest | ConvertTo-Json -Depth 5 | Set-Content $json -Encoding utf8
+# Sem BOM: o atualizador lê o JSON direto.
+[IO.File]::WriteAllText((Join-Path $root $json), ($latest | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding $false))
 
 $ErrorActionPreference = "Continue"
 git tag $tag
