@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
-import { kickoffLabel, type SportGame, type SportsControl, type TeamOption } from "./useSports";
+import { csSide, kickoffLabel, type CsLive, type SportGame, type SportsControl, type TeamOption } from "./useSports";
 import { Digits } from "../ui/Digits";
 
 function Logo({ src, size = 28, name }: { src: string | null; size?: number; name: string }) {
@@ -25,7 +25,38 @@ function PinButton({ game, onToggle, small }: { game: SportGame; onToggle(id: st
   </button>;
 }
 
-function Scoreboard({ game, onPin }: { game: SportGame; onPin(id: string): void }) {
+// Motivo do fim do round em ícone: explodiu, desarmou, eliminação, tempo.
+const roundGlyph: Record<string, [string, string]> = {
+  bomb: ["M11 5h2M12 3v2M9 8a6 6 0 1 0 6 0zM16 4l2-2", "bomba explodiu"],
+  defuse: ["M4 20l7-7M14 4l6 6-8 8-6-6zM15 9l-2 2", "bomba desarmada"],
+  elimination: ["M12 5a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM12 2v5M12 17v5M2 12h5M17 12h5", "eliminação"],
+  time: ["M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z", "acabou o tempo"],
+};
+const sameTeam = (a: string, b: string) => { const clean = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, ""); const x = clean(a), y = clean(b); return !!x && !!y && (x === y || (x.length >= 4 && y.includes(x)) || (y.length >= 4 && x.includes(y))); };
+
+/** CS2 ao vivo (HLTV): lado de cada time, round atual e os últimos 5 rounds com o motivo. */
+function CsRounds({ game, live }: { game: SportGame; live: CsLive }) {
+  const homeCt = sameTeam(live.ctTeam, game.home.name) || sameTeam(live.ctTeam, game.home.short);
+  const side = (home: boolean) => (home === homeCt ? "CT" : "TR");
+  const last = live.history.slice(-5);
+  return <div className="cs-live" aria-label="Rounds ao vivo">
+    <span className="cs-side" data-side={side(true)}>{side(true)}</span>
+    <span className="cs-head">R{live.round}</span>
+    <span className="cs-last">{last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.winner === "CT" ? live.ctTeam : live.tTeam;
+      return <span key={round.round} className="cs-round" data-side={round.winner} title={`R${round.round}: ${team} (${round.winner === "CT" ? "CT" : "TR"}) · ${label}`} aria-label={`Round ${round.round}: ${team}, ${label}`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg></span>; })}
+      {!last.length && <span className="cs-wait">aguardando rounds</span>}</span>
+    <span className="cs-side" data-side={side(false)}>{side(false)}</span>
+  </div>;
+}
+
+/** Placar do mapa ao vivo pelo HLTV (mandante–visitante), quando o mapa é o mesmo. */
+function liveScore(game: SportGame, map: { name: string | null }, live?: CsLive | null) {
+  if (!live || live.gameId !== game.id || (map.name && live.map && map.name.toLowerCase() !== live.map.toLowerCase())) return null;
+  const homeCt = csSide(live, game.home) === "CT";
+  return homeCt ? `${live.ctScore}–${live.tScore}` : `${live.tScore}–${live.ctScore}`;
+}
+
+function Scoreboard({ game, onPin, live }: { game: SportGame; onPin(id: string): void; live?: CsLive | null }) {
   return <div className="scoreboard hd-enter">
     <div className="scoreboard-head"><span>{game.leagueName}</span><span className="scoreboard-actions"><PinButton game={game} onToggle={onPin} />{status(game)}</span></div>
     <div className="scoreboard-row">
@@ -36,9 +67,10 @@ function Scoreboard({ game, onPin }: { game: SportGame; onPin(id: string): void 
       </div>
       <div className="score-team away"><span className="score-team-name"><strong title={game.away.name}>{game.away.name}</strong>{game.away.short !== game.away.name && <small>{game.away.short}</small>}</span><Logo src={game.away.logo} size={34} name={game.away.name} /></div>
     </div>
+    {live && live.gameId === game.id && <CsRounds game={game} live={live} />}
     {game.maps && game.maps.length > 0 && <div className="map-strip" aria-label="Mapas da série">{game.maps.map((map, index) => <div key={index} className="map-chip" data-result={map.result}>
       <span className="map-name">{map.name ?? `Mapa ${index + 1}`}</span>
-      {map.result === "live" ? <span className="map-live"><span className="live-dot" />{map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo"}</span>
+      {map.result === "live" ? <span className="map-live"><span className="live-dot" />{liveScore(game, map, live) ?? (map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo")}</span>
         : map.homeRounds != null && map.awayRounds != null ? <span className="map-score"><b data-win={map.result === "home" || undefined}>{map.homeRounds}</b>–<b data-win={map.result === "away" || undefined}>{map.awayRounds}</b></span>
         : map.result === "pending" ? <span className="map-pending">a jogar</span> : map.result === "done" ? <span className="map-pending">encerrado</span> : <span className="map-score">{map.result === "home" ? game.home.short : game.away.short}</span>}
     </div>)}</div>}
@@ -67,10 +99,11 @@ export function SportsPage({ sports, onConfigure }: { sports?: SportsControl; on
   // Destaque: jogo do time seguido; senão, um com mapa em andamento identificado.
   const live = games.find(game => game.pinned && game.state !== "post") ?? games.find(game => game.state === "in" && game.followed) ?? games.find(game => game.state === "in" && game.clock) ?? games.find(game => game.state === "in");
   const next = games.filter(game => game !== live && game.state !== "post");
-  const list = (next.length ? next : games.filter(game => game !== live)).slice(0, live ? (live.maps?.length ? 1 : 2) : 4);
+  const rounds = live && sports.csLive?.gameId === live.id;
+  const list = (next.length ? next : games.filter(game => game !== live)).slice(0, live ? (rounds ? 0 : live.maps?.length ? 1 : 2) : 4);
   const error = sports.snapshot?.errors[0];
   return <div className="sports-page">
-    {live && <Scoreboard game={live} onPin={sports.togglePin} />}
+    {live && <Scoreboard game={live} onPin={sports.togglePin} live={sports.csLive} />}
     {list.length ? <ul className="game-list">{list.map((game, index) => <Row key={game.id} game={game} index={index} onPin={sports.togglePin} />)}</ul>
       : !live && <p className="context-note">{sports.snapshot ? "Sem jogos hoje nem nos próximos 3 dias." : "Buscando jogos…"}</p>}
     {error && <p className="sports-error" role="status">{error}</p>}

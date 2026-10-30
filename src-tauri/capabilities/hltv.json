@@ -1,0 +1,8 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "hltv",
+  "description": "Página do HLTV na janela oculta: só pode relatar o placar ao vivo",
+  "windows": ["hltv"],
+  "remote": { "urls": ["https://www.hltv.org/*"] },
+  "permissions": ["allow-hltv-report"]
+}

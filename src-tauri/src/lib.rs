@@ -16,6 +16,7 @@ mod lyrics;
 mod notes;
 mod pointer;
 mod updater;
+mod hltv;
 
 use settings::{AppSettings, SettingsStore};
 use tauri::{Emitter, Manager, State, WebviewWindow};
@@ -92,6 +93,16 @@ fn ask_start(app: tauri::AppHandle, id: u64, prompt: String, ask: State<'_, ask:
 
 #[tauri::command]
 fn ask_cancel(ask: State<'_, ask::Ask>) { ask.cancel(); }
+
+/// Relato da página do HLTV na janela oculta (única coisa que aquela página pode chamar).
+#[tauri::command]
+async fn hltv_report(app: tauri::AppHandle, report: hltv::Report) { app.state::<hltv::Hltv>().report(&app, report); }
+
+#[tauri::command]
+fn set_cs_pinned(id: Option<String>, hltv: State<'_, hltv::Hltv>) { hltv.pin(id); }
+
+#[tauri::command]
+fn get_cs_live(hltv: State<'_, hltv::Hltv>) -> Option<hltv::LiveRounds> { hltv.current() }
 
 #[tauri::command]
 fn get_sports(sports: State<'_, sports::Sports>) -> sports::SportsSnapshot { sports.snapshot() }
@@ -356,6 +367,9 @@ pub fn run() {
             recorder_capabilities,
             camera_bubble,
             cursor_overlay,
+            hltv_report,
+            get_cs_live,
+            set_cs_pinned,
             open_settings,
             countdown_overlay,
             recorder_state,
@@ -408,6 +422,8 @@ pub fn run() {
             app.manage(ask::Ask::default());
             app.manage(system_events::Notifications::default());
             system_events::start(app.handle().clone());
+            app.manage(hltv::Hltv::default());
+            hltv::watch(app.handle().clone());
             app.manage(sports::Sports::start(app.path().app_config_dir()?.join("sports.json")));
             app.manage(std::sync::Arc::new(recorder::Recorder::default()));
             app.manage(cursor::CursorOverlay::default());

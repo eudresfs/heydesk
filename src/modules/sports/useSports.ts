@@ -9,6 +9,18 @@ export interface SportsSnapshot { games: SportGame[]; observedAt: number | null;
 export interface SportsConfig { leagues: string[]; teams: string[]; hasToken: boolean }
 export type SportsCatalog = [id: string, name: string, kind: string][];
 export interface TeamOption { id: string; name: string; logo: string | null }
+/** CS2 ao vivo pelo HLTV: lados, placar do mapa e rounds jogados (motivo: bomb, defuse, elimination, time). */
+export interface CsRound { round: number; winner: "CT" | "T"; reason: string }
+/** Lado do time no mapa ao vivo ("CT"/"TR"), comparando nomes entre bo3.gg e HLTV. */
+export function csSide(live: CsLive | null | undefined, team: { name: string; short: string }): "CT" | "TR" | undefined {
+  if (!live) return undefined;
+  const clean = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const same = (a: string, b: string) => { const x = clean(a), y = clean(b); return !!x && !!y && (x === y || (x.length >= 4 && y.includes(x)) || (y.length >= 4 && x.includes(y))); };
+  if (same(live.ctTeam, team.name) || same(live.ctTeam, team.short)) return "CT";
+  if (same(live.tTeam, team.name) || same(live.tTeam, team.short)) return "TR";
+  return undefined;
+}
+export interface CsLive { gameId: string; map: string; round: number; ctTeam: string; tTeam: string; ctScore: number; tScore: number; phase: string; history: CsRound[] }
 
 /** Próximo aviso antes do jogo: 30 e 5 minutos antes do início. */
 export function kickoffAlert(game: SportGame, now: number): 30 | 5 | null {
@@ -51,13 +63,24 @@ export function useSports(bridge: ShellBridge, enabled: boolean) {
     try { if (next) localStorage.setItem("heydesk.sports.pinned", next); else localStorage.removeItem("heydesk.sports.pinned"); } catch {}
     return next;
   }), []);
+  useEffect(() => { void bridge.setCsPinned?.(pinned).catch(() => {}); }, [bridge, pinned]);
   const view = useMemo<SportsSnapshot | null>(() => snapshot && pinned
     ? { ...snapshot, games: snapshot.games.map(game => game.id === pinned ? { ...game, followed: true, pinned: true } : game) } : snapshot, [snapshot, pinned]);
   const save = useCallback(async (leagues: string[], teams: string[], token?: string) => {
     if (!bridge.saveSportsConfig) return;
     setConfig(await bridge.saveSportsConfig(leagues, teams, token));
   }, [bridge]);
-  return { snapshot: view, config, catalog, save, pinned, togglePin, available: Boolean(bridge.desktop && bridge.getSports) };
+  // Placar round a round do CS2 (HLTV), empurrado pelo Rust a cada mudança.
+  const [csLive, setCsLive] = useState<CsLive | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    void bridge.getCsLive?.().then(value => setCsLive(value ?? null)).catch(() => {});
+    if (!bridge.onDesktopEvent) return;
+    let stop: (() => void) | undefined, alive = true;
+    void bridge.onDesktopEvent("hltv:live", payload => setCsLive((payload as CsLive | null) ?? null)).then(fn => { if (alive) stop = fn; else fn(); });
+    return () => { alive = false; stop?.(); };
+  }, [bridge, enabled]);
+  return { snapshot: view, config, catalog, save, pinned, togglePin, csLive, available: Boolean(bridge.desktop && bridge.getSports) };
 }
 export type SportsControl = ReturnType<typeof useSports>;
 

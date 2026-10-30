@@ -17,7 +17,7 @@ import { useMascotTouch } from "./modules/context/useMascotTouch";
 import { defaultReminders, dueReminders, useNotes } from "./modules/context/useNotes";
 import { waterCopy, waterPlan } from "./modules/context/waterPlan";
 import { useAsk } from "./modules/context/useAsk";
-import { useSports } from "./modules/sports/useSports";
+import { useSports, csSide } from "./modules/sports/useSports";
 import { useCalendars } from "./modules/context/useCalendars";
 import { fileSize, useShelf } from "./modules/context/useShelf";
 import { clock as recClock, recordedMs, useRecorder } from "./modules/prompter/useRecorder";
@@ -403,9 +403,9 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {/* Jogo ao vivo: o placar ocupa o centro; o mascote sai de cena. */}
       {!activity && !waterShow && liveGame && <span className="compact-score" title={`${liveGame.home.name} × ${liveGame.away.name} · ${liveGame.leagueName}`}>
         <span className="score-logo">{liveGame.home.logo ? <img src={liveGame.home.logo} alt="" /> : liveGame.home.name.slice(0, 1)}</span>
-        <b className="score-team">{teamTag(liveGame.home)}</b>
+        <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.home)}>{teamTag(liveGame.home)}</b>
         <span className="score-pill"><span>{liveGame.home.score ?? 0}</span><i>:</i><span>{liveGame.away.score ?? 0}</span></span>
-        <b className="score-team">{teamTag(liveGame.away)}</b>
+        <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.away)}>{teamTag(liveGame.away)}</b>
         <span className="score-logo">{liveGame.away.logo ? <img src={liveGame.away.logo} alt="" /> : liveGame.away.name.slice(0, 1)}</span>
       </span>}
       {!activity && (liveGame || waterShow) ? null : trackShow || singing ? null : <Mascot expression={compactExpression} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
