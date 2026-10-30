@@ -36,7 +36,13 @@ pub struct LiveRounds {
     #[serde(default)] pub history: Vec<RoundResult>,
     /// Transmissões listadas na página da partida (para o PiP).
     #[serde(default)] pub streams: Vec<Stream>,
+    /// Mapas da série na página da partida: nome, placar final e vencedor (mandante = time 1).
+    #[serde(default)] pub maps: Vec<MapScore>,
 }
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MapScore { pub name: String, #[serde(default)] pub home: Option<u32>, #[serde(default)] pub away: Option<u32>, #[serde(default)] pub winner: String }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -256,6 +262,13 @@ const SCRIPT: &str = r##"
     const viewers = /^[\d.,]+[km]?$/i.test(words[words.length - 1] || "") ? words.pop() : "";
     return { name: words.join(" "), provider: box.dataset.streamProvider || "", country: box.querySelector("img.flag, img[class*=flag]")?.getAttribute("title") || "", viewers, embed: embedBox?.getAttribute("data-stream-embed") || "" };
   }).filter(stream => stream.embed && /^https:\/\/(www\.youtube\.com|player\.twitch\.tv|player\.kick\.com)\//.test(stream.embed));
+  // Mapas da série: nome, placar final e vencedor (lado esquerdo = time 1 = mandante).
+  const maps = () => [...document.querySelectorAll(".mapholder")].map(holder => {
+    const scores = [...holder.querySelectorAll(".results-team-score")].map(e => parseInt(e.textContent.trim()));
+    const left = holder.querySelector(".results-left")?.classList;
+    return { name: holder.querySelector(".mapname")?.textContent.trim() || "", home: Number.isFinite(scores[0]) ? scores[0] : null, away: Number.isFinite(scores[1]) ? scores[1] : null,
+      winner: left?.contains("won") ? "home" : left?.contains("lost") ? "away" : "" };
+  }).filter(map => map.name && !/^tba$/i.test(map.name));
   const score = () => {
     const root = document.querySelector("#scoreboardElement");
     if (!root) { if (/match over/i.test(document.body.innerText.slice(0, 4000))) report({ kind: "over" }); return; }
@@ -279,7 +292,7 @@ const SCRIPT: &str = r##"
       map: (roundText.split("-")[1] || "").trim(), round: parseInt(roundText) || 0,
       ctTeam: text(".ctTeamHeaderBg .teamName"), tTeam: text(".tTeamHeaderBg .teamName"),
       ctScore: parseInt(text(".ctScore")) || 0, tScore: parseInt(text(".tScore")) || 0,
-      phase: text(".timeText"), history, streams: streams(),
+      phase: text(".timeText"), history, streams: streams(), maps: maps(),
     } });
   };
   const tick = () => {

@@ -36,6 +36,15 @@ export function csFinishedMap(game: SportGame, index: number) { return finishedM
 export function csMapScore(game: SportGame, live: CsLive | null | undefined): { home: number; away: number; map: string } | null {
   if (game.state !== "in") return null;
   const index = game.maps?.findIndex(map => map.result === "live") ?? -1;
+  // Com a lista de mapas da página da partida: o mapa atual é o primeiro sem vencedor.
+  // O placar ao vivo só vale se o placar da página for desse mapa (senão ele nem começou).
+  if (live && live.gameId === game.id && live.maps?.length) {
+    const current = live.maps.find(map => !map.winner);
+    if (!current) return null;
+    const same = current.name.toLowerCase() === live.map.toLowerCase() && !csFinished(live);
+    const homeCt = csSide(live, game.home) === "CT";
+    return same ? { home: homeCt ? live.ctScore : live.tScore, away: homeCt ? live.tScore : live.ctScore, map: current.name } : { home: 0, away: 0, map: current.name };
+  }
   if (live && live.gameId === game.id && csFinished(live)) {
     // O placar final vai para o último mapa encerrado; o mapa novo usa o placar da lista.
     const homeCt = csSide(live, game.home) === "CT";
@@ -55,7 +64,8 @@ export function csMapScore(game: SportGame, live: CsLive | null | undefined): { 
   const stale = csFinished({ ctScore: map.homeRounds, tScore: map.awayRounds } as CsLive);
   return { home: stale ? 0 : map.homeRounds, away: stale ? 0 : map.awayRounds, map: map.name ?? `Mapa ${index + 1}` };
 }
-export interface CsLive { gameId: string; map: string; round: number; ctTeam: string; tTeam: string; ctScore: number; tScore: number; phase: string; history: CsRound[]; streams?: CsStream[] }
+export interface CsMap { name: string; home: number | null; away: number | null; winner: "home" | "away" | "" }
+export interface CsLive { gameId: string; map: string; round: number; ctTeam: string; tTeam: string; ctScore: number; tScore: number; phase: string; history: CsRound[]; streams?: CsStream[]; maps?: CsMap[] }
 /** Transmissão listada pelo HLTV (embed pronto: YouTube, Twitch ou Kick). */
 export interface CsStream { name: string; provider: string; country: string; viewers: string; embed: string }
 const viewersOf = (text: string) => { const value = parseFloat(text.replace(",", ".")); return Number.isFinite(value) ? value * (/k/i.test(text) ? 1000 : /m/i.test(text) ? 1_000_000 : 1) : 0; };

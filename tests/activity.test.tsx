@@ -167,3 +167,13 @@ test("água: depois de beber, o humor zera (recusas antigas não contam)", () =>
   assert.equal(plan.level, 0, "recusas antes do gole das 11h não deixam o próximo lembrete bravo");
   assert.equal(waterPlan({ ...water, skips: [...water.skips!, at(11, 58)], snoozeUntil: 0 }, at(11, 59)).level, 1);
 });
+
+test("CS2 com a lista de mapas da página: mapa novo que nem começou fica 0–0, não herda o anterior", () => {
+  const side = (id: string, name: string, score: string) => ({ id, name, short: name, logo: null, score });
+  const game = { id: "hltv:cs2|7", league: "hltv:cs2", leagueName: "PGL", start: 0, state: "in" as const, detail: "MD3", clock: null, home: side("1", "MOUZ", "1"), away: side("2", "FURIA", "1"), followed: true,
+    maps: [{ name: null, result: "done" as const, homeRounds: null, awayRounds: null }, { name: null, result: "done" as const, homeRounds: null, awayRounds: null }, { name: null, result: "live" as const, homeRounds: 13, awayRounds: 9 }] };
+  const maps = [{ name: "Dust2", home: 6, away: 13, winner: "away" as const }, { name: "Mirage", home: 13, away: 9, winner: "home" as const }, { name: "Cache", home: null, away: null, winner: "" as const }];
+  const live = { gameId: "hltv:cs2|7", map: "Mirage", round: 22, ctTeam: "MOUZ", tTeam: "FURIA", ctScore: 13, tScore: 9, phase: "", history: [], maps };
+  assert.deepEqual(csMapScore(game, live), { home: 0, away: 0, map: "Cache" });
+  assert.deepEqual(csMapScore(game, { ...live, map: "Cache", ctScore: 3, tScore: 1 }), { home: 3, away: 1, map: "Cache" });
+});

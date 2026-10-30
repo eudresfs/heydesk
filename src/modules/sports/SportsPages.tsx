@@ -37,15 +37,18 @@ const sameTeam = (a: string, b: string) => { const clean = (text: string) => tex
 /** CS2 ao vivo (HLTV): lado de cada time, round atual e os últimos 5 rounds com o motivo. */
 function CsRounds({ game, live, onWatch }: { game: SportGame; live: CsLive; onWatch?(embed: string): void }) {
   const stream = bestStream(live.streams);
+  // Placar da página ainda é do mapa anterior: o atual nem começou.
+  const upcoming = live.maps?.find(map => !map.winner);
+  const waiting = csFinished(live) || (upcoming && upcoming.name.toLowerCase() !== live.map.toLowerCase()) ? upcoming?.name ?? "próximo mapa" : null;
   const homeCt = sameTeam(live.ctTeam, game.home.name) || sameTeam(live.ctTeam, game.home.short);
   const side = (home: boolean) => (home === homeCt ? "CT" : "TR");
   const last = live.history.slice(-5);
   return <div className="cs-live" aria-label="Rounds ao vivo">
-    <span className="cs-edge"><span className="cs-side" data-side={side(true)}>{side(true)}</span><span className="cs-head">R{live.round}</span></span>
-    <span className="cs-last">{last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.team || (round.winner === "CT" ? live.ctTeam : live.tTeam);
+    <span className="cs-edge">{!waiting && <><span className="cs-side" data-side={side(true)}>{side(true)}</span><span className="cs-head">R{live.round}</span></>}</span>
+    <span className="cs-last">{waiting ? <span className="cs-wait">{waiting} ainda não começou</span> : last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.team || (round.winner === "CT" ? live.ctTeam : live.tTeam);
       return <span key={round.round} className="cs-round" data-side={round.winner} title={`R${round.round}: ${team} (${round.winner === "CT" ? "CT" : "TR"}) · ${label}`} aria-label={`Round ${round.round}: ${team}, ${label}`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg></span>; })}
-      {!last.length && <span className="cs-wait">aguardando rounds</span>}</span>
-    <span className="cs-edge cs-edge-end">{stream && onWatch && <button type="button" className="cs-watch" title={`Assistir ${stream.name} em PiP`} onClick={() => onWatch(stream.embed)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Assistir</button>}<span className="cs-side" data-side={side(false)}>{side(false)}</span></span>
+      {!waiting && !last.length && <span className="cs-wait">aguardando rounds</span>}</span>
+    <span className="cs-edge cs-edge-end">{stream && onWatch && <button type="button" className="cs-watch" title={`Assistir ${stream.name} em PiP`} onClick={() => onWatch(stream.embed)}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Assistir</button>}{!waiting && <span className="cs-side" data-side={side(false)}>{side(false)}</span>}</span>
   </div>;
 }
 
@@ -58,6 +61,17 @@ function liveScore(game: SportGame, map: { name: string | null }, live?: CsLive 
 
 // Por que não há rounds ao vivo (CS2 acompanhado): procurando, fora do HLTV, verificação.
 const csNote: Partial<Record<string, string>> = { searching: "Procurando a partida no HLTV…", missing: "Rounds ao vivo indisponíveis: esta partida não está no HLTV.", blocked: "HLTV pediu verificação; rounds ao vivo pausados por 30 min." };
+
+/** Mapas da série pela página da partida no HLTV: nome, placar final e o atual ao vivo. */
+function SeriesMaps({ live, rounds }: { live: CsLive; rounds: { home: number; away: number; map: string } | null }) {
+  const current = live.maps!.findIndex(map => !map.winner);
+  return <div className="map-strip" aria-label="Mapas da série">{live.maps!.map((map, index) => <div key={index} className="map-chip" data-result={map.winner ? "done" : index === current ? "live" : "pending"}>
+    <span className="map-name">{map.name}</span>
+    {map.winner ? <span className="map-score"><b data-win={map.winner === "home" || undefined}>{map.home ?? "–"}</b>–<b data-win={map.winner === "away" || undefined}>{map.away ?? "–"}</b></span>
+      : index === current ? <span className="map-live"><span className="live-dot" />{rounds ? `${rounds.home}–${rounds.away}` : "ao vivo"}</span>
+      : <span className="map-pending">a jogar</span>}
+  </div>)}</div>;
+}
 
 function Scoreboard({ game, onPin, live, note, onWatch }: { game: SportGame; onPin(id: string): void; live?: CsLive | null; note?: string; onWatch?(embed: string): void }) {
   const rounds = csMapScore(game, live);
@@ -74,7 +88,8 @@ function Scoreboard({ game, onPin, live, note, onWatch }: { game: SportGame; onP
       <div className="score-team away"><span className="score-team-name"><strong title={game.away.name}>{game.away.name}</strong>{game.away.short !== game.away.name && <small>{game.away.short}</small>}</span><Logo src={game.away.logo} size={34} name={game.away.name} /></div>
     </div>
     {live && live.gameId === game.id ? <CsRounds game={game} live={live} onWatch={onWatch} /> : note && <p className="cs-note">{note}</p>}
-    {game.maps && game.maps.length > 0 && <div className="map-strip" aria-label="Mapas da série">{game.maps.map((map, index) => <div key={index} className="map-chip" data-result={map.result}>
+    {live && live.gameId === game.id && live.maps?.length ? <SeriesMaps live={live} rounds={rounds} />
+      : game.maps && game.maps.length > 0 && <div className="map-strip" aria-label="Mapas da série">{game.maps.map((map, index) => <div key={index} className="map-chip" data-result={map.result}>
       <span className="map-name">{map.name ?? (map.result === "live" && live?.gameId === game.id && live.map && !csFinished(live) ? live.map : csFinishedMap(game, index)?.name || `Mapa ${index + 1}`)}</span>
       {map.result === "live" ? <span className="map-live"><span className="live-dot" />{liveScore(game, map, live) ?? (map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo")}</span>
         : map.homeRounds != null && map.awayRounds != null ? <span className="map-score"><b data-win={map.result === "home" || undefined}>{map.homeRounds}</b>–<b data-win={map.result === "away" || undefined}>{map.awayRounds}</b></span>
