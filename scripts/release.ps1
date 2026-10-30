@@ -1,4 +1,4 @@
-# Publica uma versão do Heydesk no GitHub Releases, assinada localmente.
+﻿# Publica uma versão do Heydesk no GitHub Releases, assinada localmente.
 # A chave privada nunca sai deste PC (sem segredo no GitHub): quem publica usa a sua.
 #
 # Uso:  powershell -ExecutionPolicy Bypass -File scripts\release.ps1 [-Notes "novidades"]
@@ -22,13 +22,17 @@ if ($npm -ne $version -or $cargo -ne $version) { throw "Versões diferentes: tau
 if (-not (Test-Path $Key)) { throw "Chave de assinatura não encontrada em $Key." }
 if (git status --porcelain --untracked-files=no) { throw "Há alterações não commitadas." }
 $tag = "v$version"
-if (gh release view $tag --repo $Repo 2>$null) { throw "A versão $tag já foi publicada." }
+# Comandos externos escrevem avisos no stderr; o PowerShell 5 os trataria como erro fatal.
+$ErrorActionPreference = "Continue"
+gh release view $tag --repo $Repo *> $null
+if ($LASTEXITCODE -eq 0) { throw "A versão $tag já foi publicada." }
 
 # Assinatura das atualizações (só neste processo).
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $Key -Raw
 $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 npx tauri build
 if ($LASTEXITCODE) { throw "O build falhou." }
+$ErrorActionPreference = "Stop"
 
 $bundle = "src-tauri/target/release/bundle/nsis"
 $setup = Get-Item "$bundle/Heydesk_${version}_x64-setup.exe"
@@ -42,7 +46,10 @@ $latest = [ordered]@{
 $json = Join-Path $bundle "latest.json"
 $latest | ConvertTo-Json -Depth 5 | Set-Content $json -Encoding utf8
 
+$ErrorActionPreference = "Continue"
 git tag $tag
 git push origin $tag
+if ($LASTEXITCODE) { throw "Não foi possível enviar a tag $tag." }
 gh release create $tag $setup.FullName $json --repo $Repo --title "Heydesk $tag" --notes $Notes
+if ($LASTEXITCODE) { throw "Não foi possível criar a Release." }
 Write-Host "Publicado: https://github.com/$Repo/releases/tag/$tag"
