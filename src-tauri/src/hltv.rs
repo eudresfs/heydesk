@@ -34,7 +34,13 @@ pub struct LiveRounds {
     pub ct_team: String, pub t_team: String, pub ct_score: u32, pub t_score: u32,
     #[serde(default)] pub phase: String,
     #[serde(default)] pub history: Vec<RoundResult>,
+    /// Transmissões listadas na página da partida (para o PiP).
+    #[serde(default)] pub streams: Vec<Stream>,
 }
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Stream { pub name: String, pub provider: String, #[serde(default)] pub country: String, #[serde(default)] pub viewers: String, pub embed: String }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +51,7 @@ pub struct ListedTeam { pub id: String, pub name: String, #[serde(default)] pub 
 #[serde(rename_all = "camelCase")]
 pub struct ListedMatch {
     pub id: String, #[serde(default)] pub event: String, #[serde(default)] pub start: Option<i64>,
-    #[serde(default)] pub live: bool, #[serde(default)] pub format: String, pub team1: ListedTeam, pub team2: ListedTeam,
+    #[serde(default)] pub live: bool, #[serde(default)] pub format: String, #[serde(default)] pub stage: String, pub team1: ListedTeam, pub team2: ListedTeam,
 }
 
 /// O que as páginas do HLTV mandam pelas janelas ocultas.
@@ -75,6 +81,14 @@ pub fn teams() -> Result<Vec<TeamOption>, String> {
     Ok(teams)
 }
 
+/// Fase do campeonato em português (o resto passa como veio).
+pub(crate) fn stage(text: &str) -> String {
+    let lower = text.trim().to_lowercase();
+    let known = [("grand final", "Grande final"), ("semifinal", "Semifinal"), ("quarterfinal", "Quartas de final"), ("quarter-final", "Quartas de final"), ("round of 16", "Oitavas de final"),
+        ("third place", "Disputa de 3º lugar"), ("lower bracket", "Chave inferior"), ("upper bracket", "Chave superior"), ("group stage", "Fase de grupos"), ("swiss", "Fase suíça"), ("playoff", "Playoffs"), ("final", "Final")];
+    known.iter().find(|(key, _)| lower.contains(key)).map(|(_, name)| name.to_string()).unwrap_or_else(|| text.trim().to_string())
+}
+
 /// Sigla curta para o notch: o nome se couber, senão as iniciais ou as 4 primeiras letras.
 fn short(name: &str) -> String {
     if name.chars().count() <= 5 { return name.to_uppercase(); }
@@ -93,7 +107,8 @@ pub(crate) fn to_game(item: &ListedMatch) -> Game {
             else { MapInfo { name: None, result: "pending".into(), home_rounds: None, away_rounds: None } }).collect()
     };
     Game {
-        id: format!("{LEAGUE}|{}", item.id), league: LEAGUE.into(), league_name: if item.event.is_empty() { "Counter-Strike 2".into() } else { item.event.clone() },
+        id: format!("{LEAGUE}|{}", item.id), league: LEAGUE.into(),
+        league_name: [if item.event.is_empty() { "Counter-Strike 2".to_string() } else { item.event.clone() }, stage(&item.stage)].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" · "),
         start: item.start.unwrap_or_else(|| chrono::Utc::now().timestamp_millis()), state: if item.live { "in".into() } else { "pre".into() },
         detail: item.format.to_uppercase().replace("BO", "MD"), clock: item.live.then(|| match (item.team1.score, item.team2.score) { (Some(a), Some(b)) => format!("{a}–{b}"), _ => "ao vivo".into() }),
         home: side(&item.team1), away: side(&item.team2), followed: false, maps,
@@ -228,11 +243,19 @@ const SCRIPT: &str = r##"
       event: w.querySelector(".match-event")?.dataset.eventHeadline || w.closest(".matches-event-wrapper")?.querySelector(".event-headline-wrapper")?.dataset.eventHeadline || "",
       start: parseInt(w.querySelector(".match-time[data-unix]")?.dataset.unix) || null,
       format: [...w.querySelectorAll(".match-meta")].map(e => e.textContent.trim().toLowerCase()).find(text => /^bo\d$/.test(text)) || "bo1",
+      stage: w.querySelector(".match-stage")?.textContent.trim() || "",
       team1: team(w, 0), team2: team(w, 1),
     }));
     const seen = new Set();
     report({ kind: "schedule", matches: matches.filter(m => !seen.has(m.id) && seen.add(m.id)) });
   };
+  // Transmissões da partida: nome, plataforma, bandeira, espectadores e embed pronto.
+  const streams = () => [...document.querySelectorAll(".stream-box[data-stream-provider]")].map(box => {
+    const embedBox = box.querySelector("[data-stream-embed]") || (box.nextElementSibling?.matches?.("[data-stream-embed]") ? box.nextElementSibling : null);
+    const words = box.innerText.replace(/\s+/g, " ").trim().split(" ");
+    const viewers = /^[\d.,]+[km]?$/i.test(words[words.length - 1] || "") ? words.pop() : "";
+    return { name: words.join(" "), provider: box.dataset.streamProvider || "", country: box.querySelector("img.flag, img[class*=flag]")?.getAttribute("title") || "", viewers, embed: embedBox?.getAttribute("data-stream-embed") || "" };
+  }).filter(stream => stream.embed && /^https:\/\/(www\.youtube\.com|player\.twitch\.tv|player\.kick\.com)\//.test(stream.embed));
   const score = () => {
     const root = document.querySelector("#scoreboardElement");
     if (!root) { if (/match over/i.test(document.body.innerText.slice(0, 4000))) report({ kind: "over" }); return; }
@@ -256,7 +279,7 @@ const SCRIPT: &str = r##"
       map: (roundText.split("-")[1] || "").trim(), round: parseInt(roundText) || 0,
       ctTeam: text(".ctTeamHeaderBg .teamName"), tTeam: text(".tTeamHeaderBg .teamName"),
       ctScore: parseInt(text(".ctScore")) || 0, tScore: parseInt(text(".tScore")) || 0,
-      phase: text(".timeText"), history,
+      phase: text(".timeText"), history, streams: streams(),
     } });
   };
   const tick = () => {
@@ -274,7 +297,7 @@ mod tests {
     use super::*;
     fn listed(live: bool) -> ListedMatch {
         ListedMatch { id: "2399717".into(), event: "Stake Ranked".into(), start: Some(1_793_372_400_000), live, format: "bo3".into(),
-            team1: ListedTeam { id: "9215".into(), name: "MIBR".into(), logo: Some("https://img-cdn.hltv.org/a.png".into()), score: Some(4), maps: Some(0) },
+            stage: "Semifinal".into(), team1: ListedTeam { id: "9215".into(), name: "MIBR".into(), logo: Some("https://img-cdn.hltv.org/a.png".into()), score: Some(4), maps: Some(0) },
             team2: ListedTeam { id: "11251".into(), name: "Eternal Fire".into(), logo: None, score: Some(8), maps: Some(1) } }
     }
     #[test]

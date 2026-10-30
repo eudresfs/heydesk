@@ -5,11 +5,12 @@ import { CameraBubble } from "./modules/prompter/CameraBubble";
 import { CursorOverlay } from "./modules/prompter/CursorOverlay";
 import { CountdownOverlay } from "./modules/prompter/CountdownOverlay";
 import { SettingsWindow } from "./modules/settings/SettingsWindow";
+import { StreamPip } from "./modules/sports/StreamPip";
 import "./index.css";
 
 // A mesma página serve o notch e as janelas da gravação (?view=camera|cursor|countdown).
 const view = new URLSearchParams(location.search).get("view");
 if (view) document.documentElement.dataset.view = view;
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>{view === "camera" ? <CameraBubble /> : view === "cursor" ? <CursorOverlay /> : view === "countdown" ? <CountdownOverlay /> : view === "settings" ? <SettingsWindow /> : <App />}</React.StrictMode>,
+  <React.StrictMode>{view === "camera" ? <CameraBubble /> : view === "cursor" ? <CursorOverlay /> : view === "countdown" ? <CountdownOverlay /> : view === "settings" ? <SettingsWindow /> : view === "pip" ? <StreamPip /> : <App />}</React.StrictMode>,
 );

@@ -23,6 +23,7 @@ fn main() {
         "get_cs_live",
         "get_cs_status",
         "set_cs_pinned",
+        "stream_pip",
         "open_settings",
         "countdown_overlay",
         "recorder_state",

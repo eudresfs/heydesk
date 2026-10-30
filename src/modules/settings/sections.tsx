@@ -11,6 +11,7 @@ import { Mascot } from "../context/Mascot";
 import type { NotesControl } from "../context/useNotes";
 import { SNOOZE_MIN, waterSettings } from "../context/waterPlan";
 import { playSound } from "../sound/sounds";
+import { setStoredFlag, useStoredFlag } from "../../lib/storedFlag";
 
 type Settings = ReturnType<typeof useSettings>;
 
@@ -199,6 +200,7 @@ export function SportsSection({ sports, bridge }: { sports?: SportsControl; brid
   const [query, setQuery] = useState("");
   const [token, setToken] = useState("");
   const [tokenStatus, setTokenStatus] = useState("");
+  const pip = useStoredFlag("heydesk.sports.pip");
   const config = sports?.config;
   const chosen = config?.leagues ?? [];
   useEffect(() => { if ((!league || !chosen.includes(league)) && chosen.length) setLeague(chosen[0]); }, [chosen.join("|")]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -233,6 +235,9 @@ export function SportsSection({ sports, bridge }: { sports?: SportsControl; brid
             : <span className="set-desc">Nenhum time com esse nome.</span>}
         </span>
       </div> : <div className="set-block"><span className="set-desc">Escolha uma competição acima para seguir times dela.</span></div>}
+    </Group>
+    <Group title="Transmissão">
+      <Row title="Abrir a transmissão em PiP" desc="Quando um time seguido de CS2 entra ao vivo, um vídeo pequeno abre logo abaixo do notch, sem som, no canal em português mais assistido. Também dá para abrir pelo botão Assistir."><Toggle label="Abrir a transmissão em PiP" on={pip} onChange={on => setStoredFlag("heydesk.sports.pip", on)} /></Row>
     </Group>
     <Group title="Chave do PandaScore">
       <Row title="CS2, Valorant, LoL e Dota" desc={<>Grátis em pandascore.co. A chave fica só neste computador.{tokenStatus && <b className="set-note"> {tokenStatus}</b>}</>} wide>

@@ -49,7 +49,9 @@ export function waterPlan(water: Water, now: number): WaterPlan {
   const ready = asked || now >= nextAt;
   const due = ready && !waiting ? (left < sip && !asked ? "refill" : "drink") : null;
   const late = due && now > nextAt ? Math.floor((now - nextAt) / gap) : 0;
-  const level = Math.min(3, skips.length + late) as WaterPlan["level"];
+  // Bebeu, o humor zera: só contam as recusas depois do último gole.
+  const recent = skips.filter(time => time > lastDrink).length;
+  const level = Math.min(3, recent + late) as WaterPlan["level"];
   // Agenda prevista: o próximo (mesmo atrasado) e os seguintes até o fim do período.
   const upcoming = Array.from({ length: sipsLeft }, (_, index) => Math.min(anchor + gap * (index + 1), to));
   return { ...idle, nextAt: waiting ? water.snoozeUntil! : nextAt, due, level, upcoming };

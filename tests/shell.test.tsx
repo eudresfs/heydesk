@@ -495,7 +495,7 @@ test("CSS fixa páginas sem scroll e preserva raios da superfície sem escalar t
   const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
   // Rolagens permitidas: o popover do teleprompter (painel baixo) e a conversa do Ask expandida.
   const scrollRules = css.split(/\r?\n/).filter(line => /overflow(?:-y)?:\s*(auto|scroll)/.test(line));
-  assert.deepEqual(scrollRules.map(line => line.split("{")[0].trim()), [".prompter-pop", ".ask-page[data-tall] .ask-log", ".settings-body"]); // a janela de configurações rola; o notch não
+  assert.deepEqual(scrollRules.map(line => line.split("{")[0].trim()), [".prompter-pop", ".ask-page[data-tall] .ask-log", ".settings-body", ".pip-menu"]); // a janela de configurações rola; o notch não
   assert.doesNotMatch(css, /transition:\s*all/);
   assert.doesNotMatch(css, /scale\(\.7142857143|scaleY\(\.15/);
   assert.match(css, /width: 220px; height: 32px/);

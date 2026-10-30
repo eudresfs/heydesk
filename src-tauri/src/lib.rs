@@ -98,6 +98,28 @@ fn ask_cancel(ask: State<'_, ask::Ask>) { ask.cancel(); }
 #[tauri::command]
 async fn hltv_report(app: tauri::AppHandle, report: hltv::Report) { app.state::<hltv::Hltv>().report(&app, report); }
 
+/// Transmissão em PiP: janela pequena, sempre por cima, logo abaixo do notch, com o
+/// player do canal (só YouTube, Twitch e Kick). `None` fecha.
+#[tauri::command]
+async fn stream_pip(app: tauri::AppHandle, url: Option<String>) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("pip") { window.destroy().map_err(|error| error.to_string())?; }
+    let Some(url) = url else { return Ok(()) };
+    let parsed = tauri::Url::parse(&url).map_err(|_| "Link inválido.".to_string())?;
+    if parsed.scheme() != "https" || !matches!(parsed.host_str(), Some("www.youtube.com" | "player.twitch.tv" | "player.kick.com")) { return Err("Transmissão não suportada.".into()); }
+    let mut page = tauri::Url::parse("http://localhost/index.html").map_err(|error| error.to_string())?;
+    page.query_pairs_mut().append_pair("view", "pip").append_pair("src", parsed.as_str());
+    let (width, height) = (384.0, 216.0);
+    let mut builder = tauri::WebviewWindowBuilder::new(&app, "pip", tauri::WebviewUrl::App(format!("index.html?{}", page.query().unwrap_or_default()).into()))
+        .title("Transmissão").inner_size(width, height).decorations(false).always_on_top(true).skip_taskbar(true).resizable(false).focused(false)
+        .background_color(tauri::window::Color(0, 0, 0, 255));
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let (scale, size) = (monitor.scale_factor(), monitor.size());
+        builder = builder.position((size.width as f64 / scale - width) / 2.0, 44.0);
+    }
+    builder.build().map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 fn set_cs_pinned(id: Option<String>, hltv: State<'_, hltv::Hltv>) { hltv.pin(id); }
 
@@ -374,6 +396,7 @@ pub fn run() {
             get_cs_live,
             get_cs_status,
             set_cs_pinned,
+            stream_pip,
             open_settings,
             countdown_overlay,
             recorder_state,

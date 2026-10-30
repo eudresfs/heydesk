@@ -94,6 +94,8 @@ export interface ShellBridge {
   getLeagueTeams?(league: string): Promise<import("../modules/sports/useSports").TeamOption[]>;
   getCsLive?(): Promise<import("../modules/sports/useSports").CsLive | null>;
   setCsPinned?(id: string | null): Promise<void>;
+  /** Abre (url) ou fecha (null) a transmissão em PiP abaixo do notch. */
+  streamPip?(url: string | null): Promise<void>;
   getCsStatus?(): Promise<{ gameId: string; state: "searching" | "live" | "missing" | "blocked" } | null>;
   saveNotes?(notes: Notes): Promise<Notes>;
   getKeepAwake?(): Promise<boolean>;
@@ -173,6 +175,7 @@ export function createShellBridge(): ShellBridge {
     getCsLive: () => invoke("get_cs_live"),
     setCsPinned: id => invoke("set_cs_pinned", { id }),
     getCsStatus: () => invoke("get_cs_status"),
+    streamPip: url => invoke("stream_pip", { url }),
     askCancel: async () => { cancelAsk?.(); await invoke<void>("ask_cancel"); },
     saveNotes: notes => invoke<Notes>("save_notes", { notes }),
     getKeepAwake: () => invoke<boolean>("get_keep_awake"),

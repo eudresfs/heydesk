@@ -158,3 +158,12 @@ test("troca de mapa no CS2: placar final vai para o mapa encerrado e o novo come
   assert.equal(csFinished({ ...live, ctScore: 12, tScore: 10 }), false);
   assert.equal(csFinished({ ...live, ctScore: 16, tScore: 14 }), true, "fim da prorrogação");
 });
+
+test("água: depois de beber, o humor zera (recusas antigas não contam)", () => {
+  const at = (hour: number, minute = 0) => new Date(2026, 9, 30, hour, minute).getTime();
+  const water: Water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [{ at: at(11), ml: 250 }], snoozeUntil: 0, bottleMl: 500, bottleLeftMl: 100, startMin: 540, endMin: 1020, days: [1, 2, 3, 4, 5], snooze: true, skips: [at(10, 10), at(10, 30)] };
+  const plan = waterPlan(water, at(11, 59));
+  assert.equal(plan.due, "refill");
+  assert.equal(plan.level, 0, "recusas antes do gole das 11h não deixam o próximo lembrete bravo");
+  assert.equal(waterPlan({ ...water, skips: [...water.skips!, at(11, 58)], snoozeUntil: 0 }, at(11, 59)).level, 1);
+});

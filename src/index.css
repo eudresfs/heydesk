@@ -1045,3 +1045,24 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 .water-card { column-gap: 16px; }
 .water-thanks { grid-template-columns: 60px minmax(0, 1fr); column-gap: 18px; padding-left: 16px; }
 .live-map small { margin-left: 5px; font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+
+/* Botão Assistir no placar ao vivo do CS2. */
+.cs-watch { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); font: inherit; font-size: 10.5px; font-weight: 650; cursor: pointer; }
+.cs-watch svg { width: 10px; height: 10px; fill: currentColor; }
+.cs-watch:hover { background: var(--surface-3); }
+
+/* PiP da transmissão (janela própria abaixo do notch). */
+html[data-view=pip], html[data-view=pip] body { background: #000 !important; overflow: hidden; }
+.pip { position: fixed; inset: 0; overflow: hidden; border-radius: 12px; background: #000; cursor: grab; }
+.pip-player { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.pip-empty { display: grid; place-items: center; height: 100%; margin: 0; color: var(--text-muted); font-size: 12px; }
+.pip-bar { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: linear-gradient(rgba(0,0,0,.7), transparent); opacity: 0; transition: opacity 160ms ease; }
+.pip:hover .pip-bar, .pip-bar:focus-within { opacity: 1; }
+.pip-grip { flex: 1; height: 18px; }
+.pip-button { display: inline-grid; place-items: center; min-width: 26px; height: 24px; padding: 0 6px; border: 0; border-radius: 7px; background: rgba(0,0,0,.6); color: #fff; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
+.pip-button svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.pip-button:hover { background: rgba(255,255,255,.18); }
+.pip-menu { position: absolute; left: 8px; top: 34px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100% - 42px); overflow-y: auto; padding: 4px; border-radius: 10px; background: rgba(18,18,20,.96); box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+.pip-menu button { display: grid; grid-template-columns: 18px auto auto; align-items: center; gap: 6px; padding: 6px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.pip-menu button:hover, .pip-menu button[aria-current] { background: rgba(255,255,255,.1); }
+.pip-menu small { color: var(--text-faint); font-size: 10.5px; }

@@ -17,7 +17,8 @@ import { useMascotTouch } from "./modules/context/useMascotTouch";
 import { defaultReminders, dueReminders, useNotes } from "./modules/context/useNotes";
 import { waterCopy, waterPlan } from "./modules/context/waterPlan";
 import { useAsk } from "./modules/context/useAsk";
-import { useSports, csMapScore, csSide } from "./modules/sports/useSports";
+import { useSports, bestStream, csMapScore, csSide } from "./modules/sports/useSports";
+import { useStoredFlag } from "./lib/storedFlag";
 import { useCalendars } from "./modules/context/useCalendars";
 import { fileSize, useShelf } from "./modules/context/useShelf";
 import { clock as recClock, recordedMs, useRecorder } from "./modules/prompter/useRecorder";
@@ -222,6 +223,17 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const lyricLine = lyricAt >= 0 ? lyricLines[lyricAt].text || "♪" : null;
   // Jogo ao vivo de time seguido fica no compacto enquanto durar (atividades passam por cima).
   const liveGame = !island.hidden ? sports.snapshot?.games.find(game => game.state === "in" && game.followed) ?? null : null;
+  // Transmissão em PiP (Configurações › Esportes): abre sozinha, uma vez por jogo, quando o
+  // time seguido entra ao vivo e o HLTV lista os canais.
+  const pipAuto = useStoredFlag("heydesk.sports.pip");
+  useEffect(() => {
+    const live = sports.csLive;
+    if (!pipAuto || !liveGame || !live || live.gameId !== liveGame.id) return;
+    const stream = bestStream(live.streams);
+    if (!stream) return;
+    try { if (sessionStorage.getItem("heydesk.pip.opened") === liveGame.id) return; sessionStorage.setItem("heydesk.pip.opened", liveGame.id); } catch { /* sem armazenamento */ }
+    sports.watch(stream.embed);
+  }, [pipAuto, liveGame?.id, sports.csLive?.gameId, sports.csLive?.streams?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const waterShow = waterPending && !activity && !island.hidden;
   // Bebeu depois de um lembrete: o mascote se acalma e agradece por alguns segundos.
   const [waterThanks, setWaterThanks] = useState<{ level: number; key: number } | null>(null);
@@ -241,7 +253,12 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const countShow = recorder.countdown != null;
   useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast ? { width: 372, height: toastHeight } : waterShow || thanksShow ? { width: 404, height: 104 } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, thanksShow, recShow, countShow]); // eslint-disable-line react-hooks/exhaustive-deps
   // Clicar no notch com a água pendente abre direto na página Água.
-  useEffect(() => { if (island.expanded && waterPending && page !== "water") selectPage("water", false, 1); }, [island.expanded]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Abrir o painel: lembrete de água pendente leva à Água; jogo seguido ao vivo, aos Esportes.
+  useEffect(() => {
+    if (!island.expanded) return;
+    if (waterPending) { if (page !== "water") selectPage("water", false, 1); }
+    else if (liveGame && contextPages.includes("sports") && page !== "sports") selectPage("sports", false, 1);
+  }, [island.expanded]); // eslint-disable-line react-hooks/exhaustive-deps
   // O mascote anuncia: primeiro olha para o ícone que entra, depois reage ao evento.
   const [glance, setGlance] = useState(false);
   useEffect(() => {
