@@ -785,11 +785,11 @@ html[data-view=cursor], html[data-view=cursor] body { background: transparent !i
 .water-no:hover { background: var(--surface-3); color: var(--text); }
 .water-yes { background: var(--info); color: #06121f; }
 .water-yes:hover { background: color-mix(in oklab, var(--info) 85%, white); }
-.water-card[data-level="2"] .water-card-face, .water-card[data-level="3"] .water-card-face { background: color-mix(in oklab, var(--rec) 22%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--rec) 45%, transparent); }
-.water-card[data-level="2"] .toast-text b, .water-card[data-level="3"] .toast-text b { color: #ff7a6e; }
-.water-card[data-level="3"] .water-card-face { animation: hd-shake 520ms ease-in-out 2; }
+.water-card:not(.water-thanks)[data-level="2"] .water-card-face, .water-card:not(.water-thanks)[data-level="3"] .water-card-face { background: color-mix(in oklab, var(--rec) 22%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--rec) 45%, transparent); }
+.water-card:not(.water-thanks)[data-level="2"] .toast-text b, .water-card:not(.water-thanks)[data-level="3"] .toast-text b { color: #ff7a6e; }
+.water-card:not(.water-thanks)[data-level="3"] .water-card-face { animation: hd-shake 520ms ease-in-out 2; }
 @keyframes hd-shake { 0%, 100% { translate: 0; } 20%, 60% { translate: -3px 0; } 40%, 80% { translate: 3px 0; } }
-@media (prefers-reduced-motion: reduce) { .water-card, .water-card[data-level="3"] .water-card-face { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .water-card, .water-card:not(.water-thanks)[data-level="3"] .water-card-face { animation: none; } }
 
 /* Página da água: garrafa (enche ao clicar), ajustes e lembrete com o humor do dia. */
 .water-head .switch { margin-left: auto; }
@@ -985,10 +985,10 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 .water-thanks { grid-template-rows: 1fr; }
 .water-thanks .water-card-face { position: relative; transition: background 600ms var(--ease-out), box-shadow 600ms var(--ease-out); }
 .water-thanks[data-step="0"] .water-card-face { background: color-mix(in oklab, var(--rec) 22%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--rec) 45%, transparent); }
-.water-thanks[data-step="2"] .water-card-face { background: color-mix(in oklab, var(--info) 18%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--info) 40%, transparent); }
+.water-thanks[data-step="2"] .water-card-face { background: color-mix(in oklab, var(--glow-b, #2d5bff) 18%, transparent); box-shadow: 0 0 18px color-mix(in oklab, var(--glow-b, #2d5bff) 40%, transparent); }
 .water-thanks .mascot { transition: color 600ms var(--ease-out); }
 .water-thanks[data-step="2"] .mascot svg { animation: hop 420ms cubic-bezier(.23,1,.32,1) both; }
-.water-thanks .toast-text b { color: var(--info); }
+.water-thanks .toast-text b { color: color-mix(in oklab, var(--glow-b, #2d5bff) 55%, white); }
 .water-hearts { position: absolute; inset: 0; pointer-events: none; }
 .water-hearts i { position: absolute; left: 50%; bottom: 40%; font-size: 12px; font-style: normal; opacity: 0; animation: water-heart 1400ms var(--ease-out) forwards; }
 .water-hearts i:nth-child(1) { margin-left: -16px; animation-delay: 1000ms; }
@@ -1017,8 +1017,24 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 
 /* Lembrete com o mascote bravo: tudo vermelho (brilho, cartão, botão). */
 [data-water-angry] .mascot-ambient { opacity: 1; background: linear-gradient(90deg, #ff7a5c, #ff453a 50%, #c81e3a); animation: breathe 1.2s ease-in-out infinite; }
-.water-card[data-level="2"], .water-card[data-level="3"] { background: radial-gradient(120% 140% at 50% 120%, color-mix(in oklab, var(--rec) 30%, transparent), transparent 70%); }
-.water-card[data-level="2"] .water-yes, .water-card[data-level="3"] .water-yes { background: var(--rec); color: #fff; }
-.water-card[data-level="2"] .water-yes:hover, .water-card[data-level="3"] .water-yes:hover { background: color-mix(in oklab, var(--rec) 85%, white); }
-.water-card[data-level="2"] .water-no, .water-card[data-level="3"] .water-no { background: color-mix(in oklab, var(--rec) 22%, var(--surface-2)); color: #ffb3ab; }
-.water-card[data-level="2"] .toast-text span, .water-card[data-level="3"] .toast-text span { color: color-mix(in oklab, #ff7a6e 70%, white); }
+.water-card:not(.water-thanks)[data-level="2"], .water-card:not(.water-thanks)[data-level="3"] { background: radial-gradient(120% 140% at 50% 120%, color-mix(in oklab, var(--rec) 30%, transparent), transparent 70%); }
+.water-card:not(.water-thanks)[data-level="2"] .water-yes, .water-card:not(.water-thanks)[data-level="3"] .water-yes { background: var(--rec); color: #fff; }
+.water-card:not(.water-thanks)[data-level="2"] .water-yes:hover, .water-card:not(.water-thanks)[data-level="3"] .water-yes:hover { background: color-mix(in oklab, var(--rec) 85%, white); }
+.water-card:not(.water-thanks)[data-level="2"] .water-no, .water-card:not(.water-thanks)[data-level="3"] .water-no { background: color-mix(in oklab, var(--rec) 22%, var(--surface-2)); color: #ffb3ab; }
+.water-card:not(.water-thanks)[data-level="2"] .toast-text span, .water-card:not(.water-thanks)[data-level="3"] .toast-text span { color: color-mix(in oklab, #ff7a6e 70%, white); }
+
+/* Cartão de água à vista: o conteúdo do notch fechado (relógio, olhos, laterais) some por baixo dele. */
+.shell[data-water-card] .compact-button > :not(.mascot-ambient) { opacity: 0 !important; transition: opacity 160ms ease; }
+/* Alívio: começa no vermelho do lembrete e assenta no azul calmo; o mascote ocupa o rosto inteiro. */
+.water-thanks { overflow: hidden; }
+.water-thanks::before, .water-thanks::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; transition: opacity 900ms var(--ease-out); }
+.water-thanks::before { background: radial-gradient(120% 140% at 50% 120%, color-mix(in oklab, var(--rec) 30%, transparent), transparent 70%); opacity: 0; }
+.water-thanks::after { background: radial-gradient(120% 140% at 50% 120%, color-mix(in oklab, var(--glow-b, #2d5bff) 32%, transparent), transparent 70%); opacity: 1; }
+.water-thanks[data-step="0"]::before { opacity: 1; }
+.water-thanks[data-step="0"]::after { opacity: 0; }
+.water-thanks .water-card-face { width: 60px; height: 60px; }
+.water-thanks .water-card-face .mascot svg { scale: 1.35; }
+.water-thanks[data-step="0"] .toast-text b { color: #ff7a6e; }
+.water-thanks .toast-text b { transition: color 900ms var(--ease-out); }
+.water-thanks .toast-text span { color: var(--text-muted); }
+.water-hearts i { color: var(--glow-b, #2d5bff); text-shadow: 0 0 8px var(--glow-b, #2d5bff); }

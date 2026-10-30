@@ -227,6 +227,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const [waterThanks, setWaterThanks] = useState<{ level: number; key: number } | null>(null);
   useEffect(() => { if (!waterThanks) return; const timer = window.setTimeout(() => setWaterThanks(null), THANKS_MS); return () => window.clearTimeout(timer); }, [waterThanks]);
   const thanksShow = Boolean(waterThanks) && !island.hidden && !island.expanded;
+  // Prévia do alívio para conferir o visual sem registrar gole (chamada pelo console de depuração).
+  useEffect(() => { (window as unknown as { heydeskPreviewThanks?: (level?: number) => void }).heydeskPreviewThanks = (level = 2) => setWaterThanks({ level, key: Date.now() }); }, []);
   const waterPulse = waterShow ? Math.floor(waterTick / 300_000) : 0;
   useEffect(() => { if (waterShow) play("reminder"); }, [waterShow, waterPulse]); // eslint-disable-line react-hooks/exhaustive-deps
   const openedOnce = useRef(false);
@@ -328,7 +330,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const feedback = !bridge.desktop ? "Salvar no aplicativo desktop." : settings.loadState === "loading" ? "Carregando…" : settings.loadState === "error" ? "Falha ao carregar." : settings.saveState === "error" ? "Falha ao salvar. Rascunho preservado." : settings.saveState === "saving" ? "Salvando…" : settings.saveState === "saved" ? "Configurações salvas." : settings.dirty ? "Alterações não salvas." : "";
   const pageIndex = contextPages.indexOf(page);
 
-  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toast || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
+  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due))) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toast || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
     onMouseMove={island.pointerMove} onMouseLeave={island.pointerLeave}
     onBlurCapture={event => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;

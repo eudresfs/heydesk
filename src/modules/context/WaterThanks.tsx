@@ -24,7 +24,7 @@ export function WaterThanks({ level, shape, color, reducedMotion }: { level: num
   const [title, sub] = thanks[Math.max(0, Math.min(3, level))];
   return <div className="water-card water-thanks" role="status" aria-live="polite" data-step={step} data-level={level}>
     <span className="water-card-face"><Mascot expression={expression} active reducedMotion={reducedMotion} shape={shape} color={step === 0 ? "#ff453a" : color} bounce pace="lively" />
-      {!reducedMotion && <span className="water-hearts" aria-hidden="true"><i>💙</i><i>💧</i><i>💙</i></span>}</span>
+      {!reducedMotion && <span className="water-hearts" aria-hidden="true"><i>♥</i><i>♥</i><i>♥</i></span>}</span>
     <span className="toast-text"><b>{title}</b><span>{sub}</span></span>
   </div>;
 }
