@@ -56,7 +56,7 @@ export interface ShellBridge {
   askCancel?(): Promise<void>;
   getMediaArt?(): Promise<string | null>;
   /** Eventos do Windows (volume, rede, notificações) emitidos pelo backend na hora. */
-  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section" | "notes:changed" | "hltv:live", callback: (payload: unknown) => void): Promise<() => void>;
+  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section" | "notes:changed" | "hltv:live" | "hltv:status", callback: (payload: unknown) => void): Promise<() => void>;
   configureNotifications?(enabled: boolean, apps: string[]): Promise<string>;
   /** Windows em silêncio (Não perturbe/tela cheia), melhor esforço. */
   getQuiet?(): Promise<boolean>;
@@ -94,6 +94,7 @@ export interface ShellBridge {
   getLeagueTeams?(league: string): Promise<import("../modules/sports/useSports").TeamOption[]>;
   getCsLive?(): Promise<import("../modules/sports/useSports").CsLive | null>;
   setCsPinned?(id: string | null): Promise<void>;
+  getCsStatus?(): Promise<{ gameId: string; state: "searching" | "live" | "missing" | "blocked" } | null>;
   saveNotes?(notes: Notes): Promise<Notes>;
   getKeepAwake?(): Promise<boolean>;
 }
@@ -171,6 +172,7 @@ export function createShellBridge(): ShellBridge {
     getLeagueTeams: league => invoke("get_league_teams", { league }),
     getCsLive: () => invoke("get_cs_live"),
     setCsPinned: id => invoke("set_cs_pinned", { id }),
+    getCsStatus: () => invoke("get_cs_status"),
     askCancel: async () => { cancelAsk?.(); await invoke<void>("ask_cancel"); },
     saveNotes: notes => invoke<Notes>("save_notes", { notes }),
     getKeepAwake: () => invoke<boolean>("get_keep_awake"),

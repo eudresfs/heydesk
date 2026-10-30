@@ -24,6 +24,7 @@
     "allow-camera-bubble",
     "allow-cursor-overlay",
     "allow-get-cs-live",
+    "allow-get-cs-status",
     "allow-set-cs-pinned",
     "allow-open-settings",
     "allow-countdown-overlay",

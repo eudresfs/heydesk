@@ -21,6 +21,7 @@ fn main() {
         "cursor_overlay",
         "hltv_report",
         "get_cs_live",
+        "get_cs_status",
         "set_cs_pinned",
         "open_settings",
         "countdown_overlay",

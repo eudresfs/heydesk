@@ -56,7 +56,10 @@ function liveScore(game: SportGame, map: { name: string | null }, live?: CsLive 
   return homeCt ? `${live.ctScore}–${live.tScore}` : `${live.tScore}–${live.ctScore}`;
 }
 
-function Scoreboard({ game, onPin, live }: { game: SportGame; onPin(id: string): void; live?: CsLive | null }) {
+// Por que não há rounds ao vivo (CS2 acompanhado): procurando, fora do HLTV, verificação.
+const csNote: Partial<Record<string, string>> = { searching: "Procurando a partida no HLTV…", missing: "Rounds ao vivo indisponíveis: esta partida não está no HLTV.", blocked: "HLTV pediu verificação; rounds ao vivo pausados por 30 min." };
+
+function Scoreboard({ game, onPin, live, note }: { game: SportGame; onPin(id: string): void; live?: CsLive | null; note?: string }) {
   return <div className="scoreboard hd-enter">
     <div className="scoreboard-head"><span>{game.leagueName}</span><span className="scoreboard-actions"><PinButton game={game} onToggle={onPin} />{status(game)}</span></div>
     <div className="scoreboard-row">
@@ -67,7 +70,7 @@ function Scoreboard({ game, onPin, live }: { game: SportGame; onPin(id: string):
       </div>
       <div className="score-team away"><span className="score-team-name"><strong title={game.away.name}>{game.away.name}</strong>{game.away.short !== game.away.name && <small>{game.away.short}</small>}</span><Logo src={game.away.logo} size={34} name={game.away.name} /></div>
     </div>
-    {live && live.gameId === game.id && <CsRounds game={game} live={live} />}
+    {live && live.gameId === game.id ? <CsRounds game={game} live={live} /> : note && <p className="cs-note">{note}</p>}
     {game.maps && game.maps.length > 0 && <div className="map-strip" aria-label="Mapas da série">{game.maps.map((map, index) => <div key={index} className="map-chip" data-result={map.result}>
       <span className="map-name">{map.name ?? `Mapa ${index + 1}`}</span>
       {map.result === "live" ? <span className="map-live"><span className="live-dot" />{liveScore(game, map, live) ?? (map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo")}</span>
@@ -99,11 +102,11 @@ export function SportsPage({ sports, onConfigure }: { sports?: SportsControl; on
   // Destaque: jogo do time seguido; senão, um com mapa em andamento identificado.
   const live = games.find(game => game.pinned && game.state !== "post") ?? games.find(game => game.state === "in" && game.followed) ?? games.find(game => game.state === "in" && game.clock) ?? games.find(game => game.state === "in");
   const next = games.filter(game => game !== live && game.state !== "post");
-  const rounds = live && sports.csLive?.gameId === live.id;
+  const rounds = live && (sports.csLive?.gameId === live.id || sports.csStatus?.gameId === live.id);
   const list = (next.length ? next : games.filter(game => game !== live)).slice(0, live ? (rounds ? 0 : live.maps?.length ? 1 : 2) : 4);
   const error = sports.snapshot?.errors[0];
   return <div className="sports-page">
-    {live && <Scoreboard game={live} onPin={sports.togglePin} live={sports.csLive} />}
+    {live && <Scoreboard game={live} onPin={sports.togglePin} live={sports.csLive} note={sports.csStatus?.gameId === live.id ? csNote[sports.csStatus.state] : undefined} />}
     {list.length ? <ul className="game-list">{list.map((game, index) => <Row key={game.id} game={game} index={index} onPin={sports.togglePin} />)}</ul>
       : !live && <p className="context-note">{sports.snapshot ? "Sem jogos hoje nem nos próximos 3 dias." : "Buscando jogos…"}</p>}
     {error && <p className="sports-error" role="status">{error}</p>}

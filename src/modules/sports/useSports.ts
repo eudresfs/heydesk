@@ -72,6 +72,15 @@ export function useSports(bridge: ShellBridge, enabled: boolean) {
   }, [bridge]);
   // Placar round a round do CS2 (HLTV), empurrado pelo Rust a cada mudança.
   const [csLive, setCsLive] = useState<CsLive | null>(null);
+  const [csStatus, setCsStatus] = useState<{ gameId: string; state: "searching" | "live" | "missing" | "blocked" } | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    void bridge.getCsStatus?.().then(value => setCsStatus(value ?? null)).catch(() => {});
+    if (!bridge.onDesktopEvent) return;
+    let stop: (() => void) | undefined, alive = true;
+    void bridge.onDesktopEvent("hltv:status", payload => setCsStatus(payload as typeof csStatus)).then(fn => { if (alive) stop = fn; else fn(); });
+    return () => { alive = false; stop?.(); };
+  }, [bridge, enabled]);
   useEffect(() => {
     if (!enabled) return;
     void bridge.getCsLive?.().then(value => setCsLive(value ?? null)).catch(() => {});
@@ -80,7 +89,7 @@ export function useSports(bridge: ShellBridge, enabled: boolean) {
     void bridge.onDesktopEvent("hltv:live", payload => setCsLive((payload as CsLive | null) ?? null)).then(fn => { if (alive) stop = fn; else fn(); });
     return () => { alive = false; stop?.(); };
   }, [bridge, enabled]);
-  return { snapshot: view, config, catalog, save, pinned, togglePin, csLive, available: Boolean(bridge.desktop && bridge.getSports) };
+  return { snapshot: view, config, catalog, save, pinned, togglePin, csLive, csStatus, available: Boolean(bridge.desktop && bridge.getSports) };
 }
 export type SportsControl = ReturnType<typeof useSports>;
 

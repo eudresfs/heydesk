@@ -105,6 +105,9 @@ fn set_cs_pinned(id: Option<String>, hltv: State<'_, hltv::Hltv>) { hltv.pin(id)
 fn get_cs_live(hltv: State<'_, hltv::Hltv>) -> Option<hltv::LiveRounds> { hltv.current() }
 
 #[tauri::command]
+fn get_cs_status(hltv: State<'_, hltv::Hltv>) -> Option<serde_json::Value> { hltv.status() }
+
+#[tauri::command]
 fn get_sports(sports: State<'_, sports::Sports>) -> sports::SportsSnapshot { sports.snapshot() }
 
 #[tauri::command]
@@ -369,6 +372,7 @@ pub fn run() {
             cursor_overlay,
             hltv_report,
             get_cs_live,
+            get_cs_status,
             set_cs_pinned,
             open_settings,
             countdown_overlay,

@@ -1013,3 +1013,4 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 
 .score-team[data-side=CT] { color: #8fbaf2; }
 .score-team[data-side=TR] { color: #edbe6d; }
+.cs-note { margin: 4px 0 0; font-size: var(--fs-micro); color: var(--text-faint); text-align: center; }

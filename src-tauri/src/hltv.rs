@@ -11,6 +11,10 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const LABEL: &str = "hltv";
 pub const LIVE_EVENT: &str = "hltv:live";
+/// Situação da busca no HLTV para o jogo acompanhado: "searching" | "live" | "missing" | "blocked".
+pub const STATUS_EVENT: &str = "hltv:status";
+/// Partida fora do HLTV: tenta de novo só depois disso (pode entrar na lista mais tarde).
+const RETRY_MISSING: Duration = Duration::from_secs(3 * 60);
 const LIST_URL: &str = "https://www.hltv.org/matches";
 const BACKOFF: Duration = Duration::from_secs(30 * 60);
 
@@ -39,10 +43,10 @@ pub struct ListedMatch { pub url: String, pub teams: Vec<String> }
 pub enum Report { List { matches: Vec<ListedMatch> }, Score { score: LiveRounds }, Blocked, Over }
 
 #[derive(Default)]
-struct State { game: Option<(String, String, String)>, page: Option<String>, last: Option<LiveRounds>, blocked_until: Option<Instant> }
+struct State { game: Option<(String, String, String)>, page: Option<String>, last: Option<LiveRounds>, blocked_until: Option<Instant>, missing: Option<(String, Instant)> }
 
 #[derive(Default)]
-pub struct Hltv { state: Mutex<State>, pinned: Mutex<Option<String>> }
+pub struct Hltv { state: Mutex<State>, pinned: Mutex<Option<String>>, status: Mutex<Option<serde_json::Value>> }
 
 /// Nomes de time comparáveis entre bo3.gg e HLTV ("Natus Vincere" ~ "NAVI" não; "MIBR" ~ "mibr" sim).
 pub(crate) fn same_team(a: &str, b: &str) -> bool {
@@ -69,6 +73,9 @@ impl Hltv {
             }
             Some(game) => {
                 if state.game.as_ref() == Some(&game) && app.get_webview_window(LABEL).is_some() { return; }
+                // Já procurada e fora do HLTV: espera antes de olhar a lista de novo.
+                if state.missing.as_ref().is_some_and(|(id, at)| *id == game.0 && at.elapsed() < RETRY_MISSING) { return; }
+                status(app, &game.0, "searching");
                 state.game = Some(game); state.page = None; state.last = None;
                 close(app);
                 open(app, LIST_URL);
@@ -89,17 +96,19 @@ impl Hltv {
                         state.page = Some(url.clone());
                         if let Some(window) = app.get_webview_window(LABEL) { if let Ok(parsed) = url.parse() { let _ = window.navigate(parsed); } }
                     }
-                    // Partida não está no HLTV (ou nome diferente): não insiste até o próximo jogo.
-                    _ => { close(app); }
+                    // Partida não está no HLTV (ou o nome é outro): avisa e só tenta de novo em 3 min.
+                    _ => { state.missing = Some((game_id.clone(), Instant::now())); status(app, &game_id, "missing"); close(app); }
                 }
             }
             Report::Score { mut score } => {
+                if state.last.is_none() { status(app, &game_id, "live"); }
                 score.game_id = game_id;
                 if state.last.as_ref() != Some(&score) { state.last = Some(score.clone()); let _ = app.emit(LIVE_EVENT, Some(score)); }
             }
             Report::Blocked => {
                 eprintln!("[Heydesk] HLTV pediu verificação; pausado por 30 min.");
                 state.blocked_until = Some(Instant::now() + BACKOFF);
+                status(app, &game_id, "blocked");
                 state.game = None; state.page = None; state.last = None;
                 close(app);
                 let _ = app.emit(LIVE_EVENT, Option::<LiveRounds>::None);
@@ -108,6 +117,7 @@ impl Hltv {
         }
     }
 
+    pub fn status(&self) -> Option<serde_json::Value> { self.status.lock().ok().and_then(|status| status.clone()) }
     pub fn current(&self) -> Option<LiveRounds> { self.state.lock().ok().and_then(|state| state.last.clone()) }
     /// Jogo acompanhado no notch (alfinete): vale como time seguido para o HLTV.
     pub fn pin(&self, id: Option<String>) { if let Ok(mut pinned) = self.pinned.lock() { *pinned = id; } }
@@ -117,13 +127,22 @@ impl Hltv {
 /// Segue, a cada 20 s, o jogo de CS2 de time seguido que estiver ao vivo.
 pub fn watch(app: AppHandle) {
     let _ = std::thread::Builder::new().name("heydesk-hltv".into()).spawn(move || loop {
-        let pinned = app.state::<Hltv>().pinned();
-        let live = app.state::<crate::sports::Sports>().snapshot().games.into_iter()
+        // Esportes pode ainda não estar registrado no início: espera a próxima volta.
+        let (Some(hltv), Some(sports)) = (app.try_state::<Hltv>(), app.try_state::<crate::sports::Sports>()) else { std::thread::sleep(Duration::from_secs(2)); continue; };
+        let pinned = hltv.pinned();
+        let live = sports.snapshot().games.into_iter()
             .find(|game| game.league == "bo3:cs2" && game.state == "in" && (game.followed || pinned.as_deref() == Some(game.id.as_str())))
             .map(|game| (game.id, game.home.name, game.away.name));
-        app.state::<Hltv>().follow(&app, live);
+        hltv.follow(&app, live);
         std::thread::sleep(Duration::from_secs(20));
     });
+}
+
+/// Avisa a interface e guarda o último estado (quem abrir depois também vê).
+fn status(app: &AppHandle, game_id: &str, state: &str) {
+    let value = serde_json::json!({ "gameId": game_id, "state": state });
+    if let Some(hltv) = app.try_state::<Hltv>() { if let Ok(mut last) = hltv.status.lock() { *last = Some(value.clone()); } }
+    let _ = app.emit(STATUS_EVENT, value);
 }
 
 fn close(app: &AppHandle) { if let Some(window) = app.get_webview_window(LABEL) { let _ = window.destroy(); } }
