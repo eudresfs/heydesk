@@ -42,7 +42,7 @@ function CsRounds({ game, live }: { game: SportGame; live: CsLive }) {
   return <div className="cs-live" aria-label="Rounds ao vivo">
     <span className="cs-side" data-side={side(true)}>{side(true)}</span>
     <span className="cs-head">R{live.round}</span>
-    <span className="cs-last">{last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.winner === "CT" ? live.ctTeam : live.tTeam;
+    <span className="cs-last">{last.map(round => { const [d, label] = roundGlyph[round.reason] ?? roundGlyph.elimination; const team = round.team || (round.winner === "CT" ? live.ctTeam : live.tTeam);
       return <span key={round.round} className="cs-round" data-side={round.winner} title={`R${round.round}: ${team} (${round.winner === "CT" ? "CT" : "TR"}) · ${label}`} aria-label={`Round ${round.round}: ${team}, ${label}`}><svg viewBox="0 0 24 24" aria-hidden="true"><path d={d} /></svg></span>; })}
       {!last.length && <span className="cs-wait">aguardando rounds</span>}</span>
     <span className="cs-side" data-side={side(false)}>{side(false)}</span>
@@ -72,7 +72,7 @@ function Scoreboard({ game, onPin, live, note }: { game: SportGame; onPin(id: st
     </div>
     {live && live.gameId === game.id ? <CsRounds game={game} live={live} /> : note && <p className="cs-note">{note}</p>}
     {game.maps && game.maps.length > 0 && <div className="map-strip" aria-label="Mapas da série">{game.maps.map((map, index) => <div key={index} className="map-chip" data-result={map.result}>
-      <span className="map-name">{map.name ?? `Mapa ${index + 1}`}</span>
+      <span className="map-name">{map.name ?? (map.result === "live" && live?.gameId === game.id && live.map ? live.map : `Mapa ${index + 1}`)}</span>
       {map.result === "live" ? <span className="map-live"><span className="live-dot" />{liveScore(game, map, live) ?? (map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo")}</span>
         : map.homeRounds != null && map.awayRounds != null ? <span className="map-score"><b data-win={map.result === "home" || undefined}>{map.homeRounds}</b>–<b data-win={map.result === "away" || undefined}>{map.awayRounds}</b></span>
         : map.result === "pending" ? <span className="map-pending">a jogar</span> : map.result === "done" ? <span className="map-pending">encerrado</span> : <span className="map-score">{map.result === "home" ? game.home.short : game.away.short}</span>}

@@ -10,7 +10,7 @@ export interface SportsConfig { leagues: string[]; teams: string[]; hasToken: bo
 export type SportsCatalog = [id: string, name: string, kind: string][];
 export interface TeamOption { id: string; name: string; logo: string | null }
 /** CS2 ao vivo pelo HLTV: lados, placar do mapa e rounds jogados (motivo: bomb, defuse, elimination, time). */
-export interface CsRound { round: number; winner: "CT" | "T"; reason: string }
+export interface CsRound { round: number; winner: "CT" | "T"; reason: string; team?: string }
 /** Lado do time no mapa ao vivo ("CT"/"TR"), comparando nomes entre bo3.gg e HLTV. */
 export function csSide(live: CsLive | null | undefined, team: { name: string; short: string }): "CT" | "TR" | undefined {
   if (!live) return undefined;

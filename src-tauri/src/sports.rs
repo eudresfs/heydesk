@@ -29,7 +29,7 @@ pub const CATALOG: &[(&str, &str, &str)] = &[
     ("espn:football/nfl", "NFL", "Futebol americano"),
     ("espn:baseball/mlb", "MLB", "Beisebol"),
     ("espn:hockey/nhl", "NHL", "Hóquei"),
-    ("bo3:cs2", "Counter-Strike 2", "E-sports"),
+    ("hltv:cs2", "Counter-Strike 2", "E-sports"),
     ("panda:valorant", "Valorant", "E-sports"),
     ("panda:lol", "League of Legends", "E-sports"),
     ("panda:dota2", "Dota 2", "E-sports"),
@@ -235,6 +235,8 @@ fn client() -> Option<reqwest::blocking::Client> {
 }
 
 fn fetch_league(client: &reqwest::blocking::Client, league: &str, token: Option<&str>, live_only: bool) -> Result<Vec<Game>, String> {
+    // CS2: agenda lida da lista do HLTV pela janela oculta (ver hltv.rs).
+    if league == crate::hltv::LEAGUE { return crate::hltv::schedule(); }
     if let Some(path) = league.strip_prefix("espn:") {
         let today = Local::now().date_naive();
         let days = if live_only { 0 } else { AHEAD_DAYS };
@@ -279,6 +281,7 @@ fn fetch_league(client: &reqwest::blocking::Client, league: &str, token: Option<
 }
 
 pub fn league_teams(league: &str, token: Option<&str>) -> Result<Vec<TeamOption>, String> {
+    if league == crate::hltv::LEAGUE { return crate::hltv::teams(); }
     let client = client().ok_or("Sem rede.")?;
     if let Some(path) = league.strip_prefix("espn:") {
         let body = client.get(format!("{ESPN}/{path}/teams")).send().and_then(|response| response.text()).map_err(|_| "ESPN indisponível.".to_string())?;
@@ -315,16 +318,29 @@ pub struct Sports { shared: Arc<(Mutex<State>, Condvar)>, path: PathBuf }
 impl Sports {
     pub fn start(path: PathBuf) -> Self {
         let mut config: SportsConfig = std::fs::read(&path).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
-        // CS2 passou do PandaScore para o bo3.gg: os ids de time mudam, a competição continua.
-        if config.leagues.iter().any(|league| league == "panda:csgo") {
-            config.leagues = config.leagues.iter().map(|league| if league == "panda:csgo" { "bo3:cs2".to_string() } else { league.clone() }).collect();
-            config.teams.retain(|team| !team.starts_with("panda:csgo|"));
+        // CS2 passou do PandaScore para o bo3.gg e depois para o HLTV: os ids de time mudam
+        // (seguir de novo), a competição continua escolhida.
+        if config.leagues.iter().any(|league| league == "panda:csgo" || league == "bo3:cs2") {
+            config.leagues = config.leagues.iter().map(|league| if league == "panda:csgo" || league == "bo3:cs2" { crate::hltv::LEAGUE.to_string() } else { league.clone() }).collect();
+            config.leagues.dedup();
+            config.teams.retain(|team| !team.starts_with("panda:csgo|") && !team.starts_with("bo3:cs2|"));
             if let Ok(bytes) = serde_json::to_vec_pretty(&config) { let _ = crate::settings::atomic_write(&path, &bytes); }
         }
         let shared = Arc::new((Mutex::new(State { config, snapshot: SportsSnapshot::default(), wake: 0, stopped: false }), Condvar::new()));
         let worker = shared.clone();
         let _ = thread::Builder::new().name("heydesk-sports".into()).spawn(move || run(worker));
         Self { shared, path }
+    }
+    /// Troca os jogos de uma competição sem esperar a próxima busca (agenda do HLTV
+    /// chega pela janela oculta, a qualquer momento).
+    pub fn merge(&self, league: &str, fresh: Vec<Game>) {
+        let Ok(mut state) = self.shared.0.lock() else { return };
+        if !state.config.leagues.iter().any(|item| item == league) { return; }
+        let mut games: Vec<Game> = state.snapshot.games.iter().filter(|game| game.league != league).cloned().collect();
+        games.extend(fresh);
+        let games = arrange(games, &state.config.teams);
+        let errors = state.snapshot.errors.iter().filter(|error| !error.contains("HLTV")).cloned().collect();
+        state.snapshot = SportsSnapshot { games, observed_at: Some(chrono::Utc::now().timestamp_millis()), errors };
     }
     pub fn snapshot(&self) -> SportsSnapshot { self.shared.0.lock().map(|state| state.snapshot.clone()).unwrap_or_default() }
     pub fn config(&self) -> PublicConfig {
