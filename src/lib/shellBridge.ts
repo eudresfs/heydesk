@@ -56,7 +56,7 @@ export interface ShellBridge {
   askCancel?(): Promise<void>;
   getMediaArt?(): Promise<string | null>;
   /** Eventos do Windows (volume, rede, notificações) emitidos pelo backend na hora. */
-  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section", callback: (payload: unknown) => void): Promise<() => void>;
+  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section" | "notes:changed", callback: (payload: unknown) => void): Promise<() => void>;
   configureNotifications?(enabled: boolean, apps: string[]): Promise<string>;
   /** Windows em silêncio (Não perturbe/tela cheia), melhor esforço. */
   getQuiet?(): Promise<boolean>;

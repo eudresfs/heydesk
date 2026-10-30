@@ -64,7 +64,7 @@ export function useNotes(bridge: ShellBridge) {
   const update = useCallback((next: Notes, delay = 0) => {
     latest.current = next; setNotes(next);
     window.clearTimeout(timer.current);
-    if (delay) { setState("saving"); timer.current = window.setTimeout(() => persist(latest.current), delay); }
+    if (delay) { setState("saving"); timer.current = window.setTimeout(() => { timer.current = undefined; persist(latest.current); }, delay); }
     else persist(next);
   }, [persist]);
   useEffect(() => {
@@ -73,6 +73,17 @@ export function useNotes(bridge: ShellBridge) {
     bridge.loadNotes().then(value => { if (active) { latest.current = value; setNotes(value); setState("ready"); } })
       .catch(reason => { if (active) { setState("error"); setError(typeof reason === "string" ? reason : "Não foi possível ler as notas."); } });
     return () => { active = false; };
+  }, [bridge]);
+  // Gravado em outra janela (ajustes da água nas configurações): adota, salvo edição pendente aqui.
+  useEffect(() => {
+    if (!bridge.onDesktopEvent) return;
+    let stop: (() => void) | undefined, alive = true;
+    void bridge.onDesktopEvent("notes:changed", payload => {
+      const next = payload as Notes;
+      if (timer.current || JSON.stringify(next) === JSON.stringify(latest.current)) return;
+      latest.current = next; setNotes(next);
+    }).then(fn => { if (alive) stop = fn; else fn(); });
+    return () => { alive = false; stop?.(); };
   }, [bridge]);
   // Sair do app com a nota pendente: grava o que estiver na fila.
   useEffect(() => () => { if (timer.current) { window.clearTimeout(timer.current); persist(latest.current); } }, [persist]);

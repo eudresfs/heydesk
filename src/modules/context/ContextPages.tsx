@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
 import type { useSettings } from "../../hooks/useSettings";
 import type { useContextSnapshots } from "./useContext";
-import { defaultReminders, parseEventText, pendingTodos, waterByHour, type NotesControl } from "./useNotes";
+import { defaultReminders, parseEventText, pendingTodos, type NotesControl } from "./useNotes";
 import { SNOOZE_MIN, waterCopy, waterPlan, waterSettings } from "./waterPlan";
 import type { AskControl } from "./useAsk";
 import { Digits } from "../ui/Digits";
@@ -20,7 +20,7 @@ import type { ClaudeLimit, CodexQuotaSnapshot, LyricLine, Lyrics, MediaAction, M
 
 // Hora e clima ficam só no compacto; aberto, o rolo tem Início, Player, Claude,
 // Sistema, Tarefas e Nota.
-export const pageNames = { home: "Início", media: "Player", limits: "Claude", system: "Sistema", tasks: "Tarefas", agenda: "Agenda", shelf: "Prateleira", prompter: "Teleprompter", water: "Água", note: "Nota", ask: "Perguntar", sports: "Esportes", sportsPrefs: "Preferências de esportes", calendarPrefs: "Agendas", pagesPrefs: "Páginas", mascotPrefs: "Mascote", soundPrefs: "Sons", appearance: "Aparência", modules: "Módulos" } as const;
+export const pageNames = { home: "Início", media: "Player", limits: "Claude", system: "Sistema", tasks: "Tarefas", agenda: "Agenda", shelf: "Prateleira", prompter: "Teleprompter", water: "Água", note: "Nota", ask: "Perguntar", sports: "Esportes", sportsPrefs: "Preferências de esportes", calendarPrefs: "Agendas", waterPrefs: "Ajustes da água", pagesPrefs: "Páginas", mascotPrefs: "Mascote", soundPrefs: "Sons", appearance: "Aparência", modules: "Módulos" } as const;
 export type ContextPage = keyof typeof pageNames;
 export function weatherLabel(code: number | null) {
   if (code == null) return "Condição indisponível";
@@ -591,14 +591,12 @@ function CalendarPrefs({ calendars }: { calendars?: CalendarsControl }) {
 
 const liters = (ml: number) => (ml / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 });
 /** Água (Nusa): total do dia contra a meta, um toque para registrar o copo, gráfico por hora. */
-function WaterPage({ notes }: { notes?: NotesControl }) {
+function WaterPage({ notes, onConfigure }: { notes?: NotesControl; onConfigure?(): void }) {
   const now = useNow(true, 30_000);
   const [editing, setEditing] = useState(false);
   if (!notes) return <div className="statement-page"><Note>Água indisponível.</Note></div>;
   const water = notes.water, plan = waterPlan(water, now), settings = waterSettings(water);
   const total = plan.drunk, share = Math.min(100, Math.round(total / water.goalMl * 100));
-  const hours = waterByHour(water, now), from = Math.floor(settings.start / 60), to = Math.max(from + 1, Math.ceil(settings.end / 60) - 1);
-  const peak = Math.max(settings.sip * 2, ...hours.slice(from, to + 1));
   const last = water.log[water.log.length - 1];
   const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   if (editing) return <WaterSettings notes={notes} onDone={() => setEditing(false)} />;
@@ -615,25 +613,38 @@ function WaterPage({ notes }: { notes?: NotesControl }) {
   }
   const status = !water.reminders ? "Lembretes desligados"
     : share >= 100 ? "Meta batida hoje"
-    : !plan.active ? `Lembretes ${weekdays(settings.days)}, das ${minuteClock(settings.start)} às ${minuteClock(settings.end)}`
-    : plan.nextAt ? `Próximo gole às ${hhmm(plan.nextAt)} · faltam ${plan.sipsLeft} gole${plan.sipsLeft > 1 ? "s" : ""}` : "";
-  return <div className="water-page">
-    <div className="water-main">
-      <div className="water-head"><span className="water-title">Água</span>
+    : !plan.active ? `Lembretes ${weekdays(settings.days)}, ${minuteClock(settings.start)}–${minuteClock(settings.end)}`
+    : plan.nextAt ? `Próximo gole às ${hhmm(plan.nextAt)}` : "";
+  // Linha do tempo do período: goles já bebidos (cheios) e previstos (vazados).
+  const span = Math.max(1, plan.to - plan.from), place = (time: number) => `${Math.min(100, Math.max(0, (time - plan.from) / span * 100))}%`;
+  const today = water.log.filter(drink => drink.at >= plan.from - 12 * 3_600_000 && new Date(drink.at).toDateString() === new Date(now).toDateString());
+  const ring = 2 * Math.PI * 40;
+  const bottleShare = Math.round(settings.left / settings.bottle * 100);
+  return <div className="water-page2">
+    <div className="water-ring" role="img" aria-label={`${liters(total)} de ${liters(water.goalMl)} litros, ${share}%`}>
+      <svg viewBox="0 0 96 96" aria-hidden="true"><circle cx="48" cy="48" r="40" className="water-ring-track" /><circle cx="48" cy="48" r="40" className="water-ring-fill" style={{ strokeDasharray: ring, strokeDashoffset: ring * (1 - share / 100) }} /></svg>
+      <span><b><Digits value={liters(total)} /></b><small>de {liters(water.goalMl)} L</small></span>
+    </div>
+    <div className="water-info">
+      <div className="water-head"><span className="water-title">Água · {share}%</span>
         <button type="button" className="switch" role="switch" aria-checked={water.reminders} aria-label="Lembretes de água" onClick={() => notes.setWater({ reminders: !water.reminders })}><i /></button>
-        <button type="button" className="icon-button" aria-label="Ajustes da água" onClick={() => setEditing(true)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg></button></div>
-      <div className="water-value"><span className="statement-number"><Digits value={liters(total)} /></span><span className="statement-unit">/ {liters(water.goalMl)} L</span></div>
-      <span className="water-sub"><b>{share}%</b> · {status}</span>
-      <div className="water-bar"><i style={{ width: `${share}%` }} /></div>
+        <button type="button" className="icon-button" aria-label="Ajustes da água" onClick={() => onConfigure ? onConfigure() : setEditing(true)}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg></button></div>
+      <span className="water-sub">{status}{plan.active && plan.sipsLeft > 0 ? ` · faltam ${plan.sipsLeft} gole${plan.sipsLeft > 1 ? "s" : ""}` : ""}</span>
       <div className="water-actions">
         <button type="button" className="water-drink" onClick={() => notes.drink()}><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>Beber {settings.sip} ml</button>
-        <button type="button" className="water-bottle" data-low={settings.left < settings.sip || undefined} aria-label={`Garrafa com ${settings.left} de ${settings.bottle} ml. Encher`} onClick={notes.refillWater}><i style={{ height: `${Math.round(settings.left / settings.bottle * 100)}%` }} /><span>{settings.left} ml</span></button>
+        <button type="button" className="water-bottle" data-low={settings.left < settings.sip || undefined} aria-label={`Garrafa com ${settings.left} de ${settings.bottle} ml. Encher`} onClick={notes.refillWater}>
+          <span className="water-bottle-glass" aria-hidden="true"><i style={{ transform: `scaleY(${bottleShare / 100})` }} /></span>
+          <span className="water-bottle-text"><b>{settings.left} ml</b><small>{settings.left < settings.sip ? "encher" : "na garrafa"}</small></span>
+        </button>
         <button type="button" className="icon-button" aria-label="Desfazer último gole" disabled={!last || now - last.at > 86_400_000} onClick={notes.undoDrink}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3" /></svg></button>
       </div>
-    </div>
-    <div className="water-chart" aria-label="Água por hora hoje" style={{ gridTemplateColumns: `repeat(${to - from + 1}, 1fr)` }}>
-      {hours.slice(from, to + 1).map((ml, index) => <span key={index} className="water-col" title={`${from + index}h · ${ml} ml`} data-now={from + index === new Date(now).getHours() || undefined}><i style={{ height: `${Math.max(ml ? 8 : 3, ml / peak * 100)}%` }} /></span>)}
-      <span className="water-axis"><span>{from}h</span><span>{Math.round((from + to) / 2)}h</span><span>{to}h</span></span>
+      <div className="water-timeline" aria-label="Goles de hoje e previstos">
+        <span className="water-track"><i className="water-now" style={{ left: place(now) }} />
+          {today.map(drink => <i key={drink.at} className="water-dot" data-done="" style={{ left: place(drink.at) }} />)}
+          {plan.upcoming.map(time => <i key={time} className="water-dot" style={{ left: place(time) }} />)}
+        </span>
+        <span className="water-axis2"><span>{minuteClock(settings.start)}</span><span>{minuteClock(settings.end)}</span></span>
+      </div>
     </div>
   </div>;
 }
@@ -730,9 +741,9 @@ export const glowPresets: Record<Exclude<MascotSettings["glow"], "custom">, [str
   aurora: ["#19b8ff", "#2d5bff", "#7b4bff"], amber: ["#ffb300", "#ffd34d", "#ff8a1f"], mint: ["#2ee6a6", "#19c37d", "#0fb5a0"],
   rose: ["#ff5fa2", "#ff3d7f", "#c84bff"], mono: ["#8a8a8a", "#d4d4d4", "#6f6f6f"],
 };
-const glowNames: Record<keyof typeof glowPresets, string> = { aurora: "Aurora", amber: "Âmbar", mint: "Menta", rose: "Rosa", mono: "Neutro" };
-const eyeColors: [string, string][] = [["#FFFFFF", "Branco"], ["#FFE08A", "Amarelo"], ["#9FE8FF", "Azul-claro"], ["#B9FFB0", "Verde-claro"], ["#FFB3D9", "Rosa"]];
-const shapes: [EyeShape, string][] = [["oval", "Oval"], ["round", "Redondo"], ["pixel", "Pixel"], ["line", "Traço"], ["heart", "Coração"]];
+export const glowNames: Record<keyof typeof glowPresets, string> = { aurora: "Aurora", amber: "Âmbar", mint: "Menta", rose: "Rosa", mono: "Neutro" };
+export const eyeColors: [string, string][] = [["#FFFFFF", "Branco"], ["#FFE08A", "Amarelo"], ["#9FE8FF", "Azul-claro"], ["#B9FFB0", "Verde-claro"], ["#FFB3D9", "Rosa"]];
+export const shapes: [EyeShape, string][] = [["oval", "Oval"], ["round", "Redondo"], ["pixel", "Pixel"], ["line", "Traço"], ["heart", "Coração"]];
 function MascotPrefs({ settings, editable }: { settings: ReturnType<typeof useSettings>; editable: boolean }) {
   const mascot = { ...defaultMascot, ...settings.draft.mascot };
   const set = (patch: Partial<MascotSettings>) => settings.edit({ ...settings.draft, mascot: { ...mascot, ...patch } });
@@ -773,11 +784,12 @@ export function ContextPages({ page, bridge, settings, context, editable, setCol
   if (page === "home") return <Home context={context} media={saved.media ? data?.media : null} notes={notes} go={go ?? (() => {})} bridge={bridge} calendars={calendars} />;
   if (page === "tasks") return <Tasks notes={notes} />;
   if (page === "note") return <QuickNote notes={notes} />;
-  if (page === "water") return <WaterPage notes={notes} />;
+  if (page === "water") return <WaterPage notes={notes} onConfigure={go ? () => go("waterPrefs") : undefined} />;
   if (page === "prompter") return <PrompterPage notes={notes} recorder={recorder} ghost={ghost} />;
   if (page === "shelf") return <ShelfPage shelf={shelf} />;
   if (page === "agenda") return <Agenda notes={notes} calendars={calendars} onConfigure={() => go?.("calendarPrefs")} />;
   if (page === "calendarPrefs") return <CalendarPrefs calendars={calendars} />;
+  if (page === "waterPrefs") return notes ? <WaterSettings notes={notes} onDone={() => go?.("water")} /> : null;
   if (page === "pagesPrefs") return <PagesPrefs settings={settings} editable={editable} />;
   if (page === "mascotPrefs") return <MascotPrefs settings={settings} editable={editable} />;
   if (page === "soundPrefs") return <SoundPrefs settings={settings} editable={editable} />;

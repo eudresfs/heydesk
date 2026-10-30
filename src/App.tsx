@@ -34,7 +34,7 @@ const tallAsk = { width: 580, height: 380 } as const;
 export const homeSize = { width: 640, height: 280 } as const;
 /** Teleprompter: mais alto, para várias linhas abaixo da câmera. */
 const prompterSize = { width: 600, height: 300 } as const;
-const settingsPageIds: ContextPage[] = ["appearance", "modules", "pagesPrefs", "mascotPrefs", "soundPrefs", "sportsPrefs", "calendarPrefs"];
+const settingsPageIds: ContextPage[] = ["appearance", "modules", "pagesPrefs", "mascotPrefs", "soundPrefs", "sportsPrefs", "calendarPrefs", "waterPrefs"];
 const allContextPages: ContextPage[] = ["home", "media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "note", "ask"];
 function editableTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('input, select, textarea, [contenteditable]:not([contenteditable=false])'));

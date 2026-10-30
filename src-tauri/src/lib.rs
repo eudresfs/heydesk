@@ -48,7 +48,7 @@ async fn open_settings(app: tauri::AppHandle, section: String) -> Result<(), Str
         return window.emit("settings:section", &section).map_err(|error| error.to_string());
     }
     let window = tauri::WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App(format!("index.html?view=settings&section={section}").into()))
-        .title("Configurações do Heydesk").inner_size(780.0, 560.0).min_inner_size(640.0, 460.0).center().resizable(true).focused(true)
+        .title("Configurações do Heydesk").background_color(tauri::window::Color(14, 14, 16, 255)).inner_size(820.0, 620.0).min_inner_size(640.0, 460.0).center().resizable(true).focused(true)
         .build().map_err(|error| error.to_string())?;
     let _ = window.set_focus();
     Ok(())
@@ -77,7 +77,12 @@ fn get_keep_awake(awake: State<'_, awake::KeepAwake>) -> bool { awake.active() }
 fn load_notes(store: State<'_, notes::NotesStore>) -> Result<notes::Notes, String> { store.load() }
 
 #[tauri::command]
-fn save_notes(notes: notes::Notes, store: State<'_, notes::NotesStore>) -> Result<notes::Notes, String> { store.save(notes) }
+fn save_notes(app: tauri::AppHandle, notes: notes::Notes, store: State<'_, notes::NotesStore>) -> Result<notes::Notes, String> {
+    let saved = store.save(notes)?;
+    // Notch e janela de configurações (ajustes da água) leem o mesmo arquivo.
+    let _ = app.emit("notes:changed", &saved);
+    Ok(saved)
+}
 
 #[tauri::command]
 fn ask_start(app: tauri::AppHandle, id: u64, prompt: String, ask: State<'_, ask::Ask>) -> Result<(), String> {

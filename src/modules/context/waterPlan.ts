@@ -16,6 +16,8 @@ export interface WaterPlan {
   due: "drink" | "refill" | null;
   /** Humor do lembrete: 0 gentil … 3 furioso (recusas e atrasos de hoje). */
   level: 0 | 1 | 2 | 3;
+  /** Período de hoje (ms) e os goles previstos daqui até o fim dele. */
+  from: number; to: number; upcoming: number[];
 }
 
 const at = (now: number, minutes: number) => { const date = new Date(now); date.setHours(0, minutes, 0, 0); return date.getTime(); };
@@ -33,7 +35,7 @@ export function waterPlan(water: Water, now: number): WaterPlan {
   const drunk = water.log.filter(drink => drink.at >= today).reduce((sum, drink) => sum + drink.ml, 0);
   const remaining = Math.max(0, water.goalMl - drunk), sipsLeft = Math.ceil(remaining / Math.max(1, sip));
   const active = water.reminders && days.includes(new Date(now).getDay()) && now >= from && now < to;
-  const idle: WaterPlan = { active, drunk, remaining, sipsLeft, nextAt: null, due: null, level: 0 };
+  const idle: WaterPlan = { active, drunk, remaining, sipsLeft, nextAt: null, due: null, level: 0, from, to, upcoming: [] };
   if (!active || !sipsLeft) return idle;
   // Ponto de partida: início do período, último gole e, sem soneca, a última recusa.
   const skips = (water.skips ?? []).filter(time => time >= today);
@@ -48,7 +50,9 @@ export function waterPlan(water: Water, now: number): WaterPlan {
   const due = ready && !waiting ? (left < sip && !asked ? "refill" : "drink") : null;
   const late = due && now > nextAt ? Math.floor((now - nextAt) / gap) : 0;
   const level = Math.min(3, skips.length + late) as WaterPlan["level"];
-  return { ...idle, nextAt: waiting ? water.snoozeUntil! : nextAt, due, level };
+  // Agenda prevista: o próximo (mesmo atrasado) e os seguintes até o fim do período.
+  const upcoming = Array.from({ length: sipsLeft }, (_, index) => Math.min(anchor + gap * (index + 1), to));
+  return { ...idle, nextAt: waiting ? water.snoozeUntil! : nextAt, due, level, upcoming };
 }
 
 /** Textos do lembrete, estilo Duolingo: começa provocando e azeda com cada recusa/atraso. */

@@ -922,11 +922,11 @@ test("Água soma o dia contra a meta, registra o copo e desfaz", async () => {
   bridge.loadNotes = async () => ({ note: "", todos: [], water: { goalMl: 2000, cupMl: 250, reminders: false, intervalMin: 60, log: [{ at: Date.now() - 60_000, ml: 500 }, { at: Date.now() - 3 * 86_400_000, ml: 900 }] } });
   bridge.saveNotes = async notes => { saves.push(notes); return notes; };
   await mount(bridge); await click("Abrir Heydesk"); await click("Água"); await advance(20);
-  assert.match(host.querySelector(".water-page")!.textContent!, /0,5\/ 2,0 L/);
-  assert.match(host.querySelector(".water-sub")!.textContent!, /25%/);
+  assert.match(host.querySelector(".water-ring")!.getAttribute("aria-label")!, /0,5 de 2,0 litros, 25%/);
+  assert.match(host.querySelector(".water-title")!.textContent!, /25%/);
   await click("Beber 250 ml"); await advance(10);
   assert.deepEqual(saves.at(-1)?.water?.log.map(drink => drink.ml), [500, 900, 250]);
-  assert.match(host.querySelector(".water-sub")!.textContent!, /38%/);
+  assert.match(host.querySelector(".water-title")!.textContent!, /38%/);
   await click("Desfazer último gole");
   assert.deepEqual(saves.at(-1)?.water?.log.map(drink => drink.ml), [500, 900]);
 });
