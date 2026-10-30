@@ -55,15 +55,17 @@ export function waterPlan(water: Water, now: number): WaterPlan {
   return { ...idle, nextAt: waiting ? water.snoozeUntil! : nextAt, due, level, upcoming };
 }
 
-/** Textos do lembrete, estilo Duolingo: começa provocando e azeda com cada recusa/atraso. */
+/** Textos do lembrete, estilo Duolingo: o mascote fala em primeira pessoa, faz chantagem
+ * emocional, finge que não liga e piora a cada recusa ou atraso. A recusa já começa culpada. */
 const drinkCopy: [string, string][][] = [
-  [["Hora do gole", "Seu rim mandou lembrança. {sip} ml, vai."], ["Bora hidratar", "{sip} ml agora e ninguém se machuca."], ["Gole programado", "Faltam {left} pra meta. Começa com {sip} ml."]],
-  [["Ei. Água.", "Você tá me ignorando? {sip} ml, já."], ["Tô vendo você", "A garrafa tá aí do lado. {sip} ml."], ["Psiu", "Desidratação não é personalidade. {sip} ml."]],
-  [["Tá secando, hein", "Seu rim tá escrevendo uma carta de demissão."], ["Atrasado de novo", "Faltam {left}. Seu rim já chorou duas vezes hoje."], ["Sério isso?", "Uma planta de plástico bebe mais que você."]],
-  [["ÚLTIMO AVISO", "Bebe essa água AGORA ou eu conto pra sua mãe."], ["Pedra no rim incoming", "Eu avisei. Avisei várias vezes. {sip} ml."], ["Chega", "Você vai beber {sip} ml e vai ser agora."]],
+  [["Oi! Sou eu, seu lembrete 💧", "Seu rim pediu {sip} ml. Eu só tô repassando o recado."], ["{sip} ml. Cinco segundos.", "Eu cronometrei. Você não tem desculpa."], ["Hora do gole!", "Faltam {left}. Eu acredito em você. Por enquanto."]],
+  [["Você me ignorou.", "Tudo bem. Eu fico aqui, secando por dentro. {sip} ml?"], ["Eu vi que você viu.", "E não bebeu. Interessante. Muito interessante."], ["Não tô bravo.", "Só decepcionado. Faltam {left}."]],
+  [["Seu rim me ligou chorando", "Disse que você parou de responder. {sip} ml, por ele."], ["Isso tá ficando constrangedor", "Até o cacto da sua mesa bebeu mais que você hoje."], ["Lembra de mim? 🥲", "Eu lembro de você. Toda hora. Faltam {left}."]],
+  [["Esses lembretes não estão funcionando.", "Talvez eu pare de mandar. Brincadeira. BEBE ÁGUA."], ["Eu sei onde você mora.", "Moro no seu notch. {sip} ml. Agora."], ["Ok. Você venceu.", "Vou avisar seu rim que a culpa foi sua. 💀"]],
 ];
-const refuseCopy = ["Agora não", "Depois eu bebo, juro", "Quero ferrar meu rim", "Quero fuder o meu rim"];
-const refillCopy: [string, string][] = [["Garrafa vazia", "Enche essa garrafa. Eu espero."], ["Cadê a água?", "Garrafa vazia não hidrata ninguém."], ["Vai lá encher", "Sem garrafa cheia, sem desculpa depois."], ["ENCHE A GARRAFA", "Agora. Levanta e vai."]];
+const refuseCopy = ["Prefiro desidratar", "Quero ferrar meu rim", "Meu rim que se vire", "Quero fuder o meu rim"];
+const yesCopy = ["Sou responsável e bebi", "Tá, tá, bebi", "Bebi, juro por Deus", "BEBI. PARA."];
+const refillCopy: [string, string][] = [["Sua garrafa tá vazia 🫙", "Enche ela. Eu espero. Eu sempre espero."], ["Garrafa vazia de novo?", "Água não brota do nada. Ainda."], ["Eu vou ser sincero", "Garrafa vazia não hidrata ninguém. Levanta."], ["LEVANTA E ENCHE.", "Não me faça repetir. Eu vou repetir."]];
 
 const liters = (ml: number) => `${(ml / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} L`;
 export function waterCopy(plan: WaterPlan, water: Water, now: number) {
@@ -73,9 +75,9 @@ export function waterCopy(plan: WaterPlan, water: Water, now: number) {
   const fill = (text: string) => text.replace("{sip}", String(sip)).replace("{left}", liters(plan.remaining));
   if (plan.due === "refill") {
     const [title, sub] = refillCopy[plan.level];
-    return { title, sub, yes: "Enchi a garrafa", no: refuseCopy[plan.level] };
+    return { title, sub, yes: plan.level >= 2 ? "Enchi, satisfeito?" : "Enchi a garrafa", no: refuseCopy[plan.level] };
   }
   const options = drinkCopy[plan.level];
   const [title, sub] = options[pick % options.length];
-  return { title: fill(title), sub: fill(sub), yes: plan.level >= 2 ? "Tá bom, bebi" : "Sou responsável e bebi", no: refuseCopy[plan.level] };
+  return { title: fill(title), sub: fill(sub), yes: yesCopy[plan.level], no: refuseCopy[plan.level] };
 }

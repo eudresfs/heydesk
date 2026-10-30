@@ -4,6 +4,7 @@ import { Window } from "happy-dom";
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import App from "../src/App";
+import { defaultWater } from "../src/modules/context/useNotes";
 import { createShellBridge, type ShellBridge, type ShellEvent, type AppSettings } from "../src/lib/shellBridge";
 import { clearMocks, mockIPC } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
@@ -49,6 +50,8 @@ function fakeBridge() {
     desktop: true,
     loadSettings: async () => { calls.push("load"); return structuredClone(defaults); },
     saveSettings: async settings => { calls.push("save"); return settings; },
+    // Lembrete de água desligado por padrão: o cartão dele não pode depender do horário em que o teste roda.
+    loadNotes: async () => ({ note: "", todos: [], water: { ...defaultWater, reminders: false } }),
     setHitShape: async shape => { calls.push(`shape:${shape.width}x${shape.height}`); },
     hide: async () => { calls.push("hide"); },
     listen: async (event, callback) => {
@@ -818,7 +821,7 @@ test("Sistema em linhas mostra disco livre, rede com curva e Keep Awake liga e d
 
 test("Início resume player, Claude e tarefas, e os cartões levam às páginas", async () => {
   const { bridge } = fakeBridge(); let saved: unknown;
-  bridge.loadNotes = async () => ({ note: "", todos: [{ id: "a", text: "Ligar para o banco", done: false, starred: false, createdAt: 2 }, { id: "b", text: "Revisar PR", done: false, starred: true, createdAt: 3 }, { id: "c", text: "Feita", done: true, starred: false, createdAt: 1 }] });
+  bridge.loadNotes = async () => ({ water: { ...defaultWater, reminders: false }, note: "", todos: [{ id: "a", text: "Ligar para o banco", done: false, starred: false, createdAt: 2 }, { id: "b", text: "Revisar PR", done: false, starred: true, createdAt: 3 }, { id: "c", text: "Feita", done: true, starred: false, createdAt: 1 }] });
   bridge.saveNotes = async notes => { saved = notes; return notes; };
   bridge.getClaudeLimits = async () => claudeSnapshot({ state: "available", limits: [claudeLimit({ percent: 45 })] });
   bridge.getDesktopStatus = async () => desktopSnapshot({ media: { state: "playing", title: "Faixa", artist: "Artista" } });
@@ -844,7 +847,7 @@ function typeInto(field: HTMLInputElement | HTMLTextAreaElement, value: string) 
 
 test("nova tarefa entra por Enter e a nota grava depois de parar de digitar", async () => {
   const { bridge } = fakeBridge(); const saves: { note: string; todos: { text: string }[] }[] = [];
-  bridge.loadNotes = async () => ({ note: "", todos: [] });
+  bridge.loadNotes = async () => ({ note: "", todos: [], water: { ...defaultWater, reminders: false } });
   bridge.saveNotes = async notes => { saves.push(notes); return notes; };
   await mount(bridge); await click("Abrir Heydesk"); await click("Tarefas");
   const input = host.querySelector<HTMLInputElement>('input[aria-label="Nova tarefa"]')!;

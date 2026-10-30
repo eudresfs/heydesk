@@ -776,6 +776,8 @@ html[data-view=cursor], html[data-view=cursor] body { background: transparent !i
 .water-card { position: absolute; left: 50%; top: 0; z-index: 4; width: 404px; height: 104px; margin-left: -202px; display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: 1fr auto; column-gap: 10px; row-gap: 8px; padding: 12px 16px 12px 12px; box-sizing: border-box; text-align: left; animation: toast-in 380ms cubic-bezier(.23, 1, .32, 1) 120ms both; }
 .water-card-face { grid-row: 1 / span 2; display: grid; place-items: center; align-self: center; width: 52px; height: 52px; border-radius: 50%; background: var(--surface-1); }
 .water-card .toast-text { align-self: center; }
+/* A provocação precisa caber inteira: subtítulo em até duas linhas. */
+.water-card .toast-text span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
 .water-card-actions { grid-column: 2; display: flex; gap: 6px; justify-content: flex-end; }
 .water-card-actions button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-pill); font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background var(--t-fast), scale var(--t-fast); }
 .water-card-actions button:active { scale: .96; }
