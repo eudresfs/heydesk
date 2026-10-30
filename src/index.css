@@ -1038,3 +1038,7 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 .water-thanks .toast-text b { transition: color 900ms var(--ease-out); }
 .water-thanks .toast-text span { color: var(--text-muted); }
 .water-hearts i { color: var(--glow-b, #2d5bff); text-shadow: 0 0 8px var(--glow-b, #2d5bff); }
+
+/* Respiro entre o rosto e o texto (o rosto do alívio é maior). */
+.water-card { column-gap: 16px; }
+.water-thanks { grid-template-columns: 60px minmax(0, 1fr); column-gap: 18px; padding-left: 16px; }
