@@ -157,14 +157,15 @@ export function useSports(bridge: ShellBridge, enabled: boolean) {
 }
 export type SportsControl = ReturnType<typeof useSports>;
 
-/** Como cada esporte chama o que mudou o placar: mapa (e-sports), gol (futebol), ponto (resto). */
-export function scoreLabel(league: string, team: string) {
-  if (/^(hltv|bo3|panda):/.test(league)) return `Mapa para ${team}`;
+/** Como cada esporte chama o que mudou o placar: mapa (e-sports), gol (futebol), ponto (resto).
+ *  `mapFor` é o texto do tema para e-sports ("{team}" vira o nome do time). */
+export function scoreLabel(league: string, team: string, mapFor?: string) {
+  if (/^(hltv|bo3|panda):/.test(league)) return mapFor?.includes("{team}") ? mapFor.replace("{team}", team) : `Mapa para ${team}`;
   if (/soccer|futebol/i.test(league)) return `Gol de ${team}`;
   return `Ponto de ${team}`;
 }
 /** Placar que mudou em jogo seguido vira aviso; o mascote comemora gol do time seguido. */
-export function sportsActivities(previous: SportsSnapshot | null, next: SportsSnapshot | null, now: number, followedTeams: string[]): ActivityInput[] {
+export function sportsActivities(previous: SportsSnapshot | null, next: SportsSnapshot | null, now: number, followedTeams: string[], mapFor?: string): ActivityInput[] {
   if (!previous || !next) return [];
   const found: ActivityInput[] = [];
   for (const game of next.games) {
@@ -178,7 +179,7 @@ export function sportsActivities(previous: SportsSnapshot | null, next: SportsSn
       // jogo só acompanhado (nenhum dos dois seguido) fica neutro.
       const ours = followedTeams.includes(`${game.league}|${scorer.id}`);
       const rival = !ours && followedTeams.includes(`${game.league}|${(homeUp ? game.away : game.home).id}`);
-      found.push({ kind: "score", group: "sport", icon: "ball", value: scoreline, label: scoreLabel(game.league, scorer.name), priority: 4, durationMs: 6000, width: 320, mood: ours ? "happy" : rival ? "worried" : "wide", tone: ours ? "ok" : "neutral" });
+      found.push({ kind: "score", group: "sport", icon: "ball", value: scoreline, label: scoreLabel(game.league, scorer.name, mapFor), priority: 4, durationMs: 6000, width: 320, mood: ours ? "happy" : rival ? "worried" : "wide", tone: ours ? "ok" : "neutral" });
     }
     const alert = kickoffAlert(game, now);
     const already = before && kickoffAlert(before, previous.observedAt ?? now - 30_000) === alert;

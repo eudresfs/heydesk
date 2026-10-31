@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "name": "Neon",
+  "author": "Heydesk",
+  "colors": {
+    "glow": [
+      "#3cf2ff",
+      "#ff3ea5",
+      "#8b5cff"
+    ]
+  },
+  "hud": {
+    "surface": "#0b0c13",
+    "text": "#eaf6ff",
+    "muted": "#a3b6ca",
+    "accent": "#ff3ea5",
+    "border": "#3cf2ff",
+    "textureOpacity": 0.3,
+    "panelOpacity": 0.95,
+    "bevel": false,
+    "shimmer": true,
+    "lines": [
+      {
+        "color": "#3cf2ff",
+        "inset": 5,
+        "width": 1.3,
+        "glow": true
+      },
+      {
+        "color": "#ff3ea5",
+        "inset": 9,
+        "width": 0.7
+      }
+    ],
+    "texture": "texture.svg",
+    "corner": "corner.svg",
+    "crest": "crest.svg",
+    "panel": "panel.svg"
+  }
+}

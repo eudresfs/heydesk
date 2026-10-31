@@ -27,13 +27,43 @@ button { cursor: pointer; }
 button:disabled { cursor: default; opacity: .35; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 1.5px solid var(--focus); outline-offset: 1px; }
 h1:focus, .panel:focus { outline: none; }
-.shell { position: relative; width: 100%; height: 100%; isolation: isolate; }
+.shell { position: relative; width: 100%; height: 100%; isolation: isolate; font-family: var(--font-sans, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif); }
+/* Tema com imagens: o mascote é bitmap (pixel art nítida); fundo e cor do rosto vêm do pacote. */
+.mascot[data-image] .mascot-image { image-rendering: pixelated; }
+.panel-face, .toast-face { background-color: var(--theme-ground, transparent); }
 .shell[data-hidden=true] { visibility: hidden; pointer-events: none; }
 /* Mesmo envelope fixo da janela nativa. */
 .preview { width: min(680px, 100vw); height: 430px; margin-inline: auto; }
 /* Um path SVG muda a forma sem provocar layout de toda a ilha a cada frame. */
 .island-surface { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.island-surface path { fill: #000; fill-opacity: var(--island-opacity); transition: fill-opacity 120ms linear; }
+.island-surface path { fill: var(--island-fill, #000); fill-opacity: var(--island-opacity); transition: fill-opacity 120ms linear; }
+.island-surface .island-edge { fill: none; stroke: var(--island-stroke); stroke-width: 1.5px; }
+/* HUD do tema: imagem de fundo do painel aberto, discreta para o texto continuar legível. */
+.island-surface .island-art { opacity: 0; transition: opacity 200ms var(--ease-out); }
+.expanded .island-surface .island-art { opacity: var(--hud-panel-opacity, .38); }
+.expanded[data-prompter] .island-surface .island-art { opacity: 0; }
+/* Textura, relevo e brilho da borda seguem o formato do notch (aberto e fechado). */
+.island-surface .island-texture { fill: url(#hud-texture); stroke: none; fill-opacity: 1; opacity: calc(var(--hud-texture-opacity, .5) * var(--island-opacity, 1)); }
+.expanded .island-surface .island-texture { opacity: var(--hud-texture-opacity, .5); }
+.island-surface .island-bevel { fill: none; stroke: url(#hud-bevel); stroke-width: 6px; fill-opacity: 0; }
+.island-surface .island-shimmer { fill: none; stroke: url(#hud-shimmer); stroke-width: 2px; fill-opacity: 0; mix-blend-mode: screen; }
+/* Filetes só com o notch aberto: fechado (32 px) eles virariam uma caixa dentro da caixa. */
+.island-surface .island-line path { fill: none; fill-opacity: 0; }
+.island-line { opacity: 0; transition: opacity 200ms var(--ease-out); }
+.expanded .island-line { opacity: 1; }
+/* Ornamentos pela geometria real do notch (variáveis atualizadas a cada quadro da animação):
+   joias onde as laterais retas encontram as curvas do filete e o brasão no centro do topo. */
+.hud-ornaments { position: absolute; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity 180ms var(--ease-out); }
+.expanded .hud-ornaments { opacity: 1; }
+.hud-ornaments[data-prompter] { opacity: 0; }
+.hud-joint { position: absolute; width: 16px; height: 16px; margin: -8px 0 0 -8px; background: var(--hud-corner) center / contain no-repeat; }
+.hud-joint[data-joint^=l] { left: calc(var(--notch-left) + var(--hud-inset)); }
+.hud-joint[data-joint^=r] { left: calc(var(--notch-left) + var(--notch-width) - var(--hud-inset)); }
+.hud-joint[data-joint$=t] { top: var(--notch-wing); }
+.hud-joint[data-joint$=b] { top: calc(var(--notch-height) - var(--notch-radius)); }
+.hud-crest { position: absolute; top: 0; left: calc(var(--notch-left) + var(--notch-width) / 2); width: 140px; height: 32px; translate: -50% 0; background: var(--hud-crest) center / contain no-repeat; }
+/* Moldura em 9 fatias em volta do painel aberto (só com tema que traz uma). */
+.panel::after { content: ""; position: absolute; inset: 4px 6px 6px; pointer-events: none; border-style: solid; border-color: transparent; border-width: min(calc(var(--hud-slice, 0) * 1px), 20px); border-image-source: var(--hud-frame, none); border-image-slice: var(--hud-slice, 0); border-image-repeat: round; }
 .expanded .island-surface path { fill-opacity: 1; }
 /* Teleprompter: o painel aberto segue a opacidade escolhida (ver o vídeo por trás). */
 .expanded[data-prompter] .island-surface path { fill-opacity: var(--island-opacity); }
@@ -274,8 +304,8 @@ h1:focus, .panel:focus { outline: none; }
 .home-greeting strong { font-size: 19px; font-weight: 650; line-height: 22px; letter-spacing: -.01em; }
 .home-greeting span { color: var(--text-muted); font-size: var(--fs-body); }
 .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 18px; align-items: start; min-width: 0; }
-.home-player { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; align-items: center; min-width: 0; padding: 12px; border: 0; border-radius: 18px; background: linear-gradient(120deg, #2a2a2c, #161617 70%); box-shadow: var(--ring); color: var(--text); text-align: left; animation: hd-in 260ms var(--ease-out) both; }
-.home-art { position: relative; display: grid; place-items: center; width: 112px; height: 112px; border-radius: 12px; overflow: hidden; background: var(--surface-3); color: var(--text-faint); cursor: pointer; border: 0; padding: 0; box-shadow: 0 8px 20px rgba(0,0,0,.45); transition: transform var(--t-fast) var(--ease-out); }
+.home-player { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 16px; align-items: center; min-width: 0; padding: 12px; border: 0; border-radius: 18px; background: linear-gradient(120deg, var(--card-a, #2a2a2c), var(--card-b, #161617) 70%); box-shadow: var(--ring); color: var(--text); text-align: left; animation: hd-in 260ms var(--ease-out) both; }
+.home-art { position: relative; display: grid; place-items: center; width: 112px; height: 112px; border-radius: 12px; overflow: hidden; background: var(--art-bg, var(--surface-3)); color: var(--text-faint); cursor: pointer; border: 0; padding: 0; box-shadow: var(--art-ring, 0 0 0 0 transparent), 0 8px 20px rgba(0,0,0,.45); transition: transform var(--t-fast) var(--ease-out); }
 .home-art:hover { transform: scale(1.02); }
 .home-art img { width: 100%; height: 100%; object-fit: cover; }
 .home-track { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -774,7 +804,7 @@ html[data-view=cursor], html[data-view=cursor] body { background: transparent !i
 
 /* Lembrete de água com botões (cartão no lugar do compacto). Fica mais vermelho com o humor. */
 .water-card { position: absolute; left: 50%; top: 0; z-index: 4; width: 404px; height: 104px; margin-left: -202px; display: grid; grid-template-columns: 52px minmax(0, 1fr); grid-template-rows: 1fr auto; column-gap: 10px; row-gap: 8px; padding: 12px 16px 12px 12px; box-sizing: border-box; text-align: left; animation: toast-in 380ms cubic-bezier(.23, 1, .32, 1) 120ms both; }
-.water-card-face { grid-row: 1 / span 2; display: grid; place-items: center; align-self: center; width: 52px; height: 52px; border-radius: 50%; background: var(--surface-1); }
+.water-card-face { grid-row: 1 / span 2; display: grid; place-items: center; align-self: center; width: 52px; height: 52px; border-radius: 50%; background: var(--theme-ground, var(--surface-1)); }
 .water-card .toast-text { align-self: center; }
 /* A provocação precisa caber inteira: subtítulo em até duas linhas. */
 .water-card .toast-text span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
@@ -912,6 +942,19 @@ html[data-view=settings], html[data-view=settings] body { background: #0e0e10 !i
 .set-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .set-option { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; width: 84px; height: 76px; border: 0; border-radius: 12px; background: var(--surface-1); color: var(--text-muted); font: inherit; font-size: 12px; cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); transition: background var(--t-fast), box-shadow var(--t-fast); }
 .set-option:hover { background: var(--surface-2); }
+.set-option:disabled, .set-swatch:disabled { opacity: .35; cursor: default; }
+.set-theme { width: 92px; height: 96px; }
+.set-theme .mascot svg { filter: none; }
+.set-theme .mascot[data-image] svg { margin-top: 10px; }
+/* Estilo de HUD: o cartão já mostra a cor e a borda do notch, com o brasão no topo. */
+.set-theme[data-hud] { justify-content: flex-start; padding-top: 0; background: var(--theme-card); box-shadow: inset 1.5px 0 0 var(--theme-card-edge), inset -1.5px 0 0 var(--theme-card-edge), inset 0 -1.5px 0 var(--theme-card-edge); border-radius: 0 0 14px 14px; }
+.set-theme[data-hud][aria-pressed=true] { box-shadow: inset 0 0 0 2px var(--primary); }
+.set-theme-crest { width: 84px; height: 19px; object-fit: contain; margin-bottom: 18px; }
+.set-theme span { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.set-actions label.set-button { display: inline-flex; align-items: center; }
+.set-actions label[aria-disabled] { opacity: .45; pointer-events: none; }
+.set-danger { background: var(--tint-danger); color: var(--danger); }
 .set-option[aria-pressed=true] { color: var(--text); box-shadow: inset 0 0 0 2px var(--primary); }
 .set-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .set-swatch { position: relative; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: var(--swatch); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); transition: scale var(--t-fast); }
@@ -937,7 +980,10 @@ html[data-view=settings], html[data-view=settings] body { background: #0e0e10 !i
 .set-summary-track { position: absolute; left: 20px; right: 20px; bottom: 14px; height: 2px; border-radius: 2px; background: rgba(255,255,255,.1); }
 .set-summary-track i { position: absolute; top: -3px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: var(--info); box-shadow: 0 0 6px color-mix(in oklab, var(--info) 60%, transparent); }
 .set-preview { display: grid; place-items: start center; height: 110px; border-radius: 14px; background: radial-gradient(120% 140% at 50% 0%, #2a2a33, #111114 70%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); overflow: hidden; }
-.set-preview-notch { position: relative; scale: 1.6; transform-origin: top center; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 240px; height: 36px; padding: 0 16px; box-sizing: border-box; border-radius: 0 0 18px 18px; background: rgba(0, 0, 0, var(--preview-opacity, .94)); overflow: hidden; }
+.set-preview-notch { position: relative; scale: 1.6; transform-origin: top center; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 240px; height: 36px; padding: 0 16px; box-sizing: border-box; border-radius: 0 0 18px 18px; background: var(--preview-fill, rgba(0, 0, 0, var(--preview-opacity, .94))); box-shadow: var(--preview-edge, none); overflow: hidden; }
+/* Prévia com tema de HUD: textura por cima da cor e borda só nas laterais e embaixo, como no notch. */
+.set-preview-notch::before { content: ""; position: absolute; inset: 0; background: var(--preview-texture, none) 0 0 / 64px 64px; opacity: var(--preview-texture-opacity, 0); pointer-events: none; }
+.set-preview-notch > * { position: relative; }
 .set-preview-notch time { font-size: 13px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; }
 .set-preview-glow { position: absolute; inset: auto 20px -14px; height: 22px; border-radius: 50%; background: linear-gradient(90deg, var(--glow-a), var(--glow-b) 55%, var(--glow-c)); filter: blur(10px); opacity: .7; }
 .set-preview-dot { justify-self: end; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }

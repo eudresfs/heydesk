@@ -53,6 +53,13 @@ fn main() {
         "get_desktop_status",
         "get_notch_interaction",
         "media_control",
+        "theme_list",
+        "theme_read",
+        "theme_import_begin",
+        "theme_import_file",
+        "theme_import_commit",
+        "theme_import_cancel",
+        "theme_remove",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("Não foi possível preparar o aplicativo Heydesk");

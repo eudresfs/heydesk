@@ -58,7 +58,7 @@ export function SettingsWindow() {
       <div className="settings-body" key={section}>
         {settings.loadState === "loading" ? <p className="settings-status">Carregando…</p>
           : <fieldset className="set-fieldset" disabled={!ready && !selfSaving.includes(section)}>
-            {section === "appearance" ? <AppearanceSection settings={settings} />
+            {section === "appearance" ? <AppearanceSection settings={settings} bridge={bridge} />
               : section === "soundPrefs" ? <SoundSection settings={settings} />
               : section === "pagesPrefs" ? <PagesSection settings={settings} />
               : section === "waterPrefs" ? <WaterSection notes={notes} />

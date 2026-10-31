@@ -25,6 +25,13 @@ export function containsNotchPoint(shape: NotchGeometry, x: number, y: number, m
   return Math.hypot(x - cornerX, y - wing) >= Math.max(0, wing - margin);
 }
 
+/** Contorno sem o lado de cima (que encosta no topo da tela): borda e brilho do tema. */
+export function notchEdgePath(shape: NotchGeometry): string {
+  const left = shape.center - shape.width / 2, right = shape.center + shape.width / 2;
+  const { height: h, radius: r, wing: e } = shape;
+  return `M${right + e} 0A${e} ${e} 0 0 0 ${right} ${e}V${h - r}A${r} ${r} 0 0 1 ${right - r} ${h}H${left + r}A${r} ${r} 0 0 1 ${left} ${h - r}V${e}A${e} ${e} 0 0 0 ${left - e} 0`;
+}
+
 export function notchPath(shape: NotchGeometry): string {
   const left = shape.center - shape.width / 2, right = shape.center + shape.width / 2;
   const { height: h, radius: r, wing: e } = shape;

@@ -28,6 +28,7 @@ import { useMascotGaze } from "./modules/context/useMascotGaze";
 import { THANKS_MS, WaterThanks } from "./modules/context/WaterThanks";
 import { glowPresets } from "./modules/context/ContextPages";
 import { defaultMascot, defaultSounds } from "./lib/shellBridge";
+import { hudStyle, moodImage, themeWater, useTheme } from "./modules/theme/useTheme";
 import { playSound, soundCategory, type SoundKind } from "./modules/sound/sounds";
 import type { BodySize } from "./modules/motion/spring";
 
@@ -207,7 +208,9 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     if (settings.loadState !== "ready" || !bridge.configureNotifications) return;
     void bridge.configureNotifications(Boolean(settings.saved.modules.notifications), ["WhatsApp"]).then(setNotificationStatus).catch(() => setNotificationStatus("unsupported"));
   }, [bridge, settings.loadState, settings.saved.modules.notifications]);
-  const activity = useActivity(context.desktop.failed ? null : desktop ?? null, activityEnabled, sports.snapshot, sports.config?.teams ?? [], waterNudge, pushed.pending);
+  // Tema do mascote (imagens, fonte, sons, cores, textos): o salvo, para o notch não mudar no rascunho.
+  const theme = useTheme(bridge, { ...defaultMascot, ...settings.saved.mascot }.theme);
+  const activity = useActivity(context.desktop.failed ? null : desktop ?? null, activityEnabled, sports.snapshot, sports.config?.teams ?? [], waterNudge, pushed.pending, theme.copy?.mapFor);
   useEffect(() => {
     if (!activity) return;
     const kinds: Partial<Record<string, SoundKind>> = { message: "notification", file: "notification", agenda: "reminder", water: "reminder", score: "goal", kickoff: "kickoff", plugged: "charger", unplugged: "unplug", "battery-low": "warn", "battery-critical": "warn", track: "track" };
@@ -241,6 +244,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const thanksShow = Boolean(waterThanks) && !island.hidden && !island.expanded;
   // Prévia do alívio para conferir o visual sem registrar gole (chamada pelo console de depuração).
   useEffect(() => { (window as unknown as { heydeskPreviewThanks?: (level?: number) => void }).heydeskPreviewThanks = (level = 2) => setWaterThanks({ level, key: Date.now() }); }, []);
+  // Abre o painel sem passar o mouse (conferir temas e HUD pelo console de depuração).
+  useEffect(() => { (window as unknown as { heydeskPreviewOpen?: (open?: boolean) => void }).heydeskPreviewOpen = (open = true) => island.change(open, open); }, [island.change]);
   const waterPulse = waterShow ? Math.floor(waterTick / 300_000) : 0;
   useEffect(() => { if (waterShow) play("reminder"); }, [waterShow, waterPulse]); // eslint-disable-line react-hooks/exhaustive-deps
   const openedOnce = useRef(false);
@@ -297,10 +302,12 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const soundRef = useRef(soundPrefs);
   soundRef.current = soundPrefs;
   const quietCache = useRef({ at: 0, quiet: false });
+  const themeSounds = useRef(theme.sounds);
+  themeSounds.current = theme.sounds;
   const play = useCallback((kind: SoundKind) => {
     const prefs = soundRef.current;
     if (!prefs.enabled || !prefs[soundCategory[kind]]) return;
-    const go = () => playSound(kind, prefs.pack, prefs.volume);
+    const go = () => playSound(kind, prefs.pack, prefs.volume, themeSounds.current.get(kind));
     if (!prefs.respectDnd || !bridge.getQuiet) { go(); return; }
     const now = Date.now();
     if (now - quietCache.current.at < 10_000) { if (!quietCache.current.quiet) go(); return; }
@@ -336,13 +343,15 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     if (settings.dirty && settings.saveState !== "saving") void settings.save();
   }
   const mascotPrefs = { ...defaultMascot, ...settings.draft.mascot };
-  const glow = waterAngry ? ["#ff7a5c", "#ff453a", "#c81e3a"] : mascotPrefs.glow === "custom" ? [mascotPrefs.glowColor, mascotPrefs.glowColor, mascotPrefs.glowColor] : glowPresets[mascotPrefs.glow];
+  const glow = waterAngry ? ["#ff7a5c", "#ff453a", "#c81e3a"] : theme.hud && theme.glow ? theme.glow : mascotPrefs.glow === "custom" ? [mascotPrefs.glowColor, mascotPrefs.glowColor, mascotPrefs.glowColor] : glowPresets[mascotPrefs.glow];
   // Cor de destaque pinta switches, sliders, progresso e botões primários. O vermelho
   // antigo (#EB0028, padrão de antes do redesenho) vale como neutro.
   const accent = /^#[0-9a-f]{6}$/i.test(settings.draft.appearance.accentColor) && settings.draft.appearance.accentColor.toUpperCase() !== "#EB0028" ? settings.draft.appearance.accentColor : "#E5E5E5";
   const accentLight = (([r, g, b]) => .2126 * r + .7152 * g + .0722 * b)([1, 3, 5].map(i => parseInt(accent.slice(i, i + 2), 16))) > 150;
   const style = { "--island-opacity": page === "prompter" && island.expanded ? (notes.prompter.opacity ?? 100) / 100 : settings.draft.appearance.opacity / 100, "--primary": accent, "--on-primary": accentLight ? "#171717" : "#ffffff",
-    "--glow-a": glow[0], "--glow-b": glow[1], "--glow-c": glow[2], "--glow-shadow": `${glow[1]}cc`, "--glow-shadow-soft": `${glow[1]}66` } as CSSProperties;
+    "--glow-a": glow[0], "--glow-b": glow[1], "--glow-c": glow[2], "--glow-shadow": `${glow[1]}cc`, "--glow-shadow-soft": `${glow[1]}66`,
+    "--font-sans": theme.fontFamily, "--theme-ground": theme.colors?.ground, "--theme-accent": theme.colors?.accent, "--theme-text": theme.colors?.text, ...hudStyle(theme.hud) } as CSSProperties;
+  const themed = (expression: MascotExpression) => ({ image: moodImage(expression, theme.images), pixelated: theme.pixelated });
   const mascotLook = mascotPrefs.look ? undefined : { x: 0, y: 0 };
   const feedback = !bridge.desktop ? "Salvar no aplicativo desktop." : settings.loadState === "loading" ? "Carregando…" : settings.loadState === "error" ? "Falha ao carregar." : settings.saveState === "error" ? "Falha ao salvar. Rascunho preservado." : settings.saveState === "saving" ? "Salvando…" : settings.saveState === "saved" ? "Configurações salvas." : settings.dirty ? "Alterações não salvas." : "";
   const pageIndex = contextPages.indexOf(page);
@@ -379,9 +388,39 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       if (!island.expanded || preferences) return;
       if (["ArrowDown", "PageDown", "ArrowUp", "PageUp"].includes(event.key)) { event.preventDefault(); movePage(event.key === "ArrowDown" || event.key === "PageDown" ? 1 : -1, true); }
     }}>
-    <svg className="island-surface" ref={island.surfaceRef} aria-hidden="true"><path data-notch-path="" /></svg>
+    <svg className="island-surface" ref={island.surfaceRef} aria-hidden="true">
+      {theme.hud && <defs>
+        {theme.hud.texture && <pattern id="hud-texture" patternUnits="userSpaceOnUse" width="128" height="128"><image href={theme.hud.texture} width="128" height="128" /></pattern>}
+        <clipPath id="hud-clip"><path data-notch-path="" /></clipPath>
+        {/* Filete a N px da borda: traço largo recortado no notch, com a faixa de 0 a N px apagada pela
+            máscara. Segue o contorno sem o lado de cima, como a borda: a moldura "pende" do topo da tela. */}
+        {theme.hud.lines.map((line, index) => <mask key={index} id={`hud-line-${index}`} maskUnits="userSpaceOnUse" x="-100" y="-100" width="2000" height="1000">
+          <rect x="-100" y="-100" width="2000" height="1000" fill="#fff" /><path data-notch-edge="" style={{ fill: "none", stroke: "#000", strokeWidth: line.inset * 2 }} />
+        </mask>)}
+        {/* Relevo: sombra crescendo para baixo; nada no topo, que encosta na tela. */}
+        <linearGradient id="hud-bevel" x1="0" y1="0" x2="0" y2="1"><stop offset=".45" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity=".65" /></linearGradient>
+        <linearGradient id="hud-shimmer" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset=".08" stopColor="#fff" stopOpacity=".95" /><stop offset=".16" stopColor="#fff" stopOpacity="0" />
+          {!reducedMotion && <animateTransform attributeName="gradientTransform" type="translate" values="-0.3 0; 1.3 0; 1.3 0" keyTimes="0; .45; 1" dur="7s" repeatCount="indefinite" />}
+        </linearGradient>
+      </defs>}
+      <path data-notch-path="" />
+      {theme.hud?.texture && <path className="island-texture" data-notch-path="" />}
+      {theme.hud?.panel && <image className="island-art" data-notch-box="" href={theme.hud.panel} preserveAspectRatio="xMidYMin slice" clipPath="url(#hud-clip)" />}
+      {theme.hud?.bevel && <path className="island-bevel" data-notch-path="" clipPath="url(#hud-clip)" />}
+      {theme.hud?.lines.map((line, index) => <g key={index} className="island-line" data-index={index} clipPath="url(#hud-clip)" style={{ filter: line.glow ? `drop-shadow(0 0 2.5px ${line.color})` : "drop-shadow(0 1px 0 rgba(0,0,0,.75))" }}>
+        <path data-notch-edge="" mask={`url(#hud-line-${index})`} style={{ fill: "none", stroke: line.color, strokeWidth: (line.inset + line.width) * 2 }} />
+      </g>)}
+      {theme.hud?.border && <path className="island-edge" data-notch-edge="" />}
+      {theme.hud?.shimmer && theme.hud.border && !reducedMotion && <path className="island-shimmer" data-notch-edge="" />}
+    </svg>
+    {/* Joias nas junções do filete (onde as retas encontram as curvas) e o brasão no topo. */}
+    {(theme.hud?.corner || theme.hud?.crest) && <span className="hud-ornaments" aria-hidden="true" data-prompter={page === "prompter" || undefined} style={{ ["--hud-inset" as string]: `${theme.hud.lines[0] ? theme.hud.lines[0].inset + theme.hud.lines[0].width / 2 : 6}px` }}>
+      {theme.hud.corner && ["lt", "rt", "lb", "rb"].map(joint => <i key={joint} className="hud-joint" data-joint={joint} />)}
+      {theme.hud.crest && <i className="hud-crest" />}
+    </span>}
     {island.viewportExpanded && <section className="panel" data-tall={askTall && page === "ask" || undefined} data-no-face={mascotPrefs.inPanel === false || undefined} data-home={page === "home" || undefined} data-prompter={page === "prompter" || undefined} ref={island.panelRef} tabIndex={-1} aria-labelledby="panel-heading" aria-hidden={!island.expanded}>
-      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
+      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} {...themed((mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression)} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
       <form className={`page-form ${preferences && page !== "sportsPrefs" && page !== "calendarPrefs" || settings.loadState === "error" || island.error ? "with-footer" : ""}`} onSubmit={submit}>
         <h1 id="panel-heading" className="sr-only" ref={heading} tabIndex={-1}>{pageNames[page]}</h1>
         <div className="page-viewport" ref={pageMotion.ref}>
@@ -410,7 +449,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {toast && (view => <span className="toast" key={`toast-${toast.id}`} data-tone={toast.tone} data-kind={toast.kind}>
         <span className="toast-icon" style={view.ring != null ? { ["--ring" as string]: `${view.ring}%` } : undefined} data-ring={view.ring != null || undefined}><ActivityIcon icon={toast.icon} /></span>
         <span className="toast-text"><b>{view.title}</b><span>{view.sub}</span></span>
-        {view.big ? <span className="toast-big">{view.big}</span> : <span className="toast-face"><Mascot expression={toast.mood} active={!island.expanded} reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></span>}
+        {view.big ? <span className="toast-big">{view.big}</span> : <span className="toast-face"><Mascot expression={toast.mood} {...themed(toast.mood)} active={!island.expanded} reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></span>}
       </span>)(toastView(toast))}
       {countShow && <span className="toast rec-count" key={`count-${recorder.countdown}`}><b>{recorder.countdown}</b><span>Gravando em…</span></span>}
       {recShow && !countShow && !waterShow && <span className="rec-compact" data-paused={recorder.state.state === "paused" || undefined}><i />{recorder.state.state === "paused" ? "Pausado" : "REC"}<b>{recClock(recordedMs(recorder.state, recNow))}</b></span>}
@@ -427,7 +466,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.away)}>{teamTag(liveGame.away)}</b>
         <span className="score-logo">{liveGame.away.logo ? <img src={liveGame.away.logo} alt="" /> : liveGame.away.name.slice(0, 1)}</span>
       </span>}
-      {!activity && (liveGame || waterShow) ? null : trackShow || singing ? null : <Mascot expression={compactExpression} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
+      {!activity && (liveGame || waterShow) ? null : trackShow || singing ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
       {singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
       {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.label} — ${trackShow.value}`}><b>{trackShow.label}</b><span>{trackShow.value}</span></span>}
       {waterShow ? <span className="compact-side compact-right compact-water"><span className="water-pill">abrir</span></span>
@@ -443,14 +482,14 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {island.error && <span className="sr-only" role="alert">{island.error}</span>}
     </button>
     {/* Lembrete de água com botões (fora do botão do compacto: botão dentro de botão não vale). */}
-    {thanksShow && waterThanks && !toast && !countShow && <WaterThanks key={waterThanks.key} level={waterThanks.level} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} reducedMotion={reducedMotion} />}
+    {thanksShow && waterThanks && !toast && !countShow && <WaterThanks key={waterThanks.key} level={waterThanks.level} images={theme.images} pixelated={theme.pixelated} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} reducedMotion={reducedMotion} />}
     {!thanksShow && waterShow && !toast && !countShow && !island.expanded && waterNow?.due && (copy => <div className="water-card" key={`wc-${waterPulse}-${waterNow.due}-${waterLevel}`} role="alertdialog" aria-label={copy.title} data-level={waterLevel} data-kind={waterNow.due}>
-      <span className="water-card-face"><Mascot expression={waterMood} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={waterAngry ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
+      <span className="water-card-face"><Mascot expression={waterMood} {...themed(waterMood)} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={waterAngry ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
       <span className="toast-text"><b>{copy.title}</b><span>{copy.sub}</span></span>
       <span className="water-card-actions">
         <button type="button" className="water-no" onClick={notes.refuseWater}>{copy.no}</button>
         <button type="button" className="water-yes" onClick={() => { if (waterNow.due === "refill") { notes.refillWater(); return; } notes.drink(); setWaterThanks({ level: waterLevel, key: Date.now() }); }}>{copy.yes}</button>
       </span>
-    </div>)(waterCopy(waterNow, notes.water, waterTick))}
+    </div>)(themeWater(waterCopy(waterNow, notes.water, waterTick), waterNow.level, theme.copy?.water))}
   <Tooltips /></main>;
 }

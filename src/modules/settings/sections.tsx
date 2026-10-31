@@ -5,7 +5,10 @@ import type { ShellBridge } from "../../lib/shellBridge";
 import type { CalendarsControl } from "../context/useCalendars";
 import type { SportsControl, TeamOption } from "../sports/useSports";
 import type { useSettings } from "../../hooks/useSettings";
-import { defaultMascot, defaultSounds, type MascotSettings, type SoundSettings } from "../../lib/shellBridge";
+import { defaultMascot, defaultSounds, type MascotSettings, type SoundSettings, type ThemeSummary } from "../../lib/shellBridge";
+import { forgetTheme, moodImage, useTheme, type ActiveTheme } from "../theme/useTheme";
+
+const noBridge = { desktop: false } as ShellBridge;
 import { eyeColors, glowNames, glowPresets, optionalPages, orderPages, pageNames, shapes } from "../context/ContextPages";
 import { Mascot } from "../context/Mascot";
 import type { NotesControl } from "../context/useNotes";
@@ -32,24 +35,82 @@ function Slider({ value, min, max, label, unit = "%", onChange }: { value: numbe
 }
 
 /** Prévia do notch fechado com o mascote do rascunho. */
-function Preview({ settings, label }: { settings: Settings; label: string }) {
+function Preview({ settings, label, theme }: { settings: Settings; label: string; theme: ActiveTheme }) {
   const mascot = { ...defaultMascot, ...settings.draft.mascot };
-  const glow = mascot.glow === "custom" ? [mascot.glowColor, mascot.glowColor, mascot.glowColor] : glowPresets[mascot.glow];
-  return <div className="set-preview" aria-label={label} role="img" style={{ ["--preview-opacity" as string]: settings.draft.appearance.opacity / 100, ["--glow-a" as string]: glow[0], ["--glow-b" as string]: glow[1], ["--glow-c" as string]: glow[2], ["--accent" as string]: settings.draft.appearance.accentColor }}>
-    <span className="set-preview-notch"><span className="set-preview-glow" /><time>09:41</time><Mascot expression="normal" active={mascot.blink} reducedMotion={false} shape={mascot.eyeShape} color={mascot.eyeColor} blink={mascot.blink} bounce={mascot.bounce} pace={mascot.pace} /><i className="set-preview-dot" /></span>
+  const glow = theme.hud && theme.glow ? theme.glow : mascot.glow === "custom" ? [mascot.glowColor, mascot.glowColor, mascot.glowColor] : glowPresets[mascot.glow];
+  const hud = theme.hud;
+  const border = hud?.border;
+  const hudVars = hud ? {
+    ["--preview-fill" as string]: hud.surface, ["--preview-texture" as string]: hud.texture ? `url("${hud.texture}")` : undefined, ["--preview-texture-opacity" as string]: hud.texture ? hud.textureOpacity : 0,
+    ["--preview-edge" as string]: border ? `inset 1.5px 0 0 ${border}, inset -1.5px 0 0 ${border}, inset 0 -1.5px 0 ${border}` : undefined,
+  } : {};
+  return <div className="set-preview" aria-label={label} role="img" style={{ ["--preview-opacity" as string]: settings.draft.appearance.opacity / 100, ["--glow-a" as string]: glow[0], ["--glow-b" as string]: glow[1], ["--glow-c" as string]: glow[2], ["--accent" as string]: hud?.accent ?? settings.draft.appearance.accentColor, ...hudVars }}>
+    <span className="set-preview-notch"><span className="set-preview-glow" /><time>09:41</time><Mascot expression="normal" image={moodImage("normal", theme.images)} pixelated={theme.pixelated} active={mascot.blink} reducedMotion={false} shape={mascot.eyeShape} color={mascot.eyeColor} blink={mascot.blink} bounce={mascot.bounce} pace={mascot.pace} /><i className="set-preview-dot" /></span>
   </div>;
 }
 
 const accents = ["#E5E5E5", "#0A84FF", "#30D158", "#00EB46", "#FFD60A", "#FF9F0A", "#FF453A", "#BF5AF2", "#FF375F"];
 
+/** Temas do mascote: embutidos e importados. Importar = escolher uma pasta com `theme.json`. */
+function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: string; onPick(id: string): void }) {
+  const [themes, setThemes] = useState<ThemeSummary[]>([]);
+  const [status, setStatus] = useState<{ busy?: boolean; error?: string; note?: string }>({});
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const refresh = () => { void bridge?.themeList?.().then(setThemes).catch(() => setStatus({ error: "Não foi possível listar os temas." })); };
+  useEffect(refresh, [bridge]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!bridge?.themeList) return null;
+  const importFolder = async (list: FileList | null) => {
+    const files = [...(list ?? [])];
+    const folder = files[0]?.webkitRelativePath.split("/")[0] || "";
+    if (!files.length || !folder || !bridge.themeImport) return;
+    setStatus({ busy: true });
+    try {
+      const id = await bridge.themeImport(files, folder);
+      forgetTheme(id);
+      refresh();
+      onPick(id);
+      setStatus({ note: "Tema importado. Salve para aplicar no notch." });
+    } catch (reason) { setStatus({ error: typeof reason === "string" ? reason : "Não foi possível importar o tema." }); }
+  };
+  const remove = async (id: string) => {
+    setConfirm(null);
+    try { await bridge.themeRemove?.(id); forgetTheme(id); if (value === id) onPick("eyes"); refresh(); }
+    catch (reason) { setStatus({ error: typeof reason === "string" ? reason : "Não foi possível remover o tema." }); }
+  };
+  const user = themes.find(theme => theme.id === value && !theme.builtIn);
+  return <Group title="Tema">
+    <Row title="Mascote do tema" desc="Os olhos padrão, um dos mascotes do Heydesk ou um pacote que você importou." wide>
+      <span className="set-options">{themes.map(theme => <button key={theme.id} type="button" className="set-option set-theme" aria-pressed={value === theme.id} disabled={Boolean(theme.error)} title={theme.error ?? theme.name} onClick={() => onPick(theme.id)}
+        data-hud={theme.surface && !theme.hasImages ? "" : undefined} style={theme.surface && !theme.hasImages ? { ["--theme-card" as string]: theme.surface, ["--theme-card-edge" as string]: theme.border ?? "transparent" } : undefined}>
+        {theme.surface && !theme.hasImages && theme.preview ? <img className="set-theme-crest" src={theme.preview} alt="" />
+          : <Mascot size="large" expression="normal" active={false} reducedMotion image={theme.preview ?? undefined} />}
+        <span>{theme.name}</span>
+      </button>)}</span>
+    </Row>
+    <Row title="Importar tema" desc={status.error ? <span role="alert">{status.error}</span> : status.note ?? <>Escolha uma pasta com <code>theme.json</code> e as imagens do mascote (PNG ou SVG). Pastas em <code>%APPDATA%\dev.heydesk.app\themes</code> também aparecem.</>}>
+      <span className="set-actions">
+        <label className="set-button" aria-disabled={status.busy || undefined}>{status.busy ? "Importando…" : "Importar pasta"}
+          <input type="file" hidden multiple disabled={status.busy} {...{ webkitdirectory: "" }} onChange={event => { void importFolder(event.target.files); event.target.value = ""; }} /></label>
+        <button type="button" className="set-button" onClick={refresh}>Atualizar</button>
+        {user && (confirm === user.id
+          ? <button type="button" className="set-button set-danger" onClick={() => void remove(user.id)}>Remover {user.name}?</button>
+          : <button type="button" className="set-button" onClick={() => setConfirm(user.id)}>Remover tema</button>)}
+      </span>
+    </Row>
+  </Group>;
+}
+
 /** Aparência e mascote numa seção só: a prévia mostra tudo junto. */
-export function AppearanceSection({ settings }: { settings: Settings }) {
+export function AppearanceSection({ settings, bridge }: { settings: Settings; bridge?: ShellBridge }) {
   const appearance = settings.draft.appearance;
   const mascot = { ...defaultMascot, ...settings.draft.mascot };
   const set = (patch: Partial<typeof appearance>) => settings.edit({ ...settings.draft, appearance: { ...appearance, ...patch } });
   const setMascot = (patch: Partial<MascotSettings>) => settings.edit({ ...settings.draft, mascot: { ...mascot, ...patch } });
+  const theme = useTheme(bridge ?? noBridge, mascot.theme);
+  const themed = Boolean(theme.images);
   return <>
-    <Preview settings={settings} label="Prévia do notch" />
+    <Preview settings={settings} label="Prévia do notch" theme={theme} />
+    <ThemeGroup bridge={bridge} value={mascot.theme ?? "eyes"} onPick={id => setMascot({ theme: id })} />
     <Group title="Ilha">
       <Row title="Opacidade do notch fechado" desc="Quanto do fundo aparece através da ilha compacta. Aplicado ao salvar."><Slider value={appearance.opacity} min={30} max={100} label="Opacidade do notch fechado" onChange={opacity => set({ opacity })} /></Row>
       <Row title="Cor de destaque" desc="Botões principais, interruptores, barras de progresso e seleções." wide>
@@ -59,8 +120,9 @@ export function AppearanceSection({ settings }: { settings: Settings }) {
       <Row title="Animações" desc="Reduzido troca molas e deslizes por transições curtas. Sistema segue o Windows."><Segmented label="Animações" value={settings.draft.motion.reducedMotion} options={[["system", "Sistema"], ["on", "Reduzido"], ["off", "Completo"]]} onChange={reducedMotion => settings.edit({ ...settings.draft, motion: { reducedMotion } })} /></Row>
     </Group>
     <Group title="Mascote">
-      <Row title="Formato dos olhos" wide><span className="set-options">{shapes.map(([shape, label]) => <button key={shape} type="button" className="set-option" aria-pressed={mascot.eyeShape === shape} onClick={() => setMascot({ eyeShape: shape })}><Mascot expression="normal" active={false} reducedMotion shape={shape} color={mascot.eyeColor} /><span>{label}</span></button>)}</span></Row>
-      <Row title="Cor dos olhos" wide><span className="set-swatches">{eyeColors.map(([color, label]) => <button key={color} type="button" className="set-swatch" style={{ ["--swatch" as string]: color }} aria-label={`Olhos ${label.toLowerCase()}`} title={label} aria-pressed={mascot.eyeColor.toUpperCase() === color} onClick={() => setMascot({ eyeColor: color })} />)}</span></Row>
+      {themed && <p className="set-desc set-note">O tema escolhido traz o próprio mascote: formato e cor dos olhos não se aplicam.</p>}
+      <Row title="Formato dos olhos" wide><span className="set-options">{shapes.map(([shape, label]) => <button key={shape} type="button" className="set-option" disabled={themed} aria-pressed={mascot.eyeShape === shape} onClick={() => setMascot({ eyeShape: shape })}><Mascot expression="normal" active={false} reducedMotion shape={shape} color={mascot.eyeColor} /><span>{label}</span></button>)}</span></Row>
+      <Row title="Cor dos olhos" wide><span className="set-swatches">{eyeColors.map(([color, label]) => <button key={color} type="button" className="set-swatch" disabled={themed} style={{ ["--swatch" as string]: color }} aria-label={`Olhos ${label.toLowerCase()}`} title={label} aria-pressed={mascot.eyeColor.toUpperCase() === color} onClick={() => setMascot({ eyeColor: color })} />)}</span></Row>
       <Row title="Brilho" desc="A luz atrás do mascote, no notch e no painel." wide>
         <span className="set-swatches">{(Object.keys(glowPresets) as (keyof typeof glowPresets)[]).map(name => <button key={name} type="button" className="set-swatch" style={{ ["--swatch" as string]: `linear-gradient(135deg, ${glowPresets[name].join(", ")})` }} aria-label={`Brilho ${glowNames[name]}`} title={glowNames[name]} aria-pressed={mascot.glow === name} onClick={() => setMascot({ glow: name })} />)}
           <label className="set-swatch set-swatch-custom" title="Outra cor" data-active={mascot.glow === "custom" || undefined}><input type="color" aria-label="Outra cor de brilho" value={mascot.glowColor} onChange={event => setMascot({ glow: "custom", glowColor: event.target.value.toUpperCase() })} /></label></span>

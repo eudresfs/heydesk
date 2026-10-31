@@ -5,7 +5,7 @@ import { advanceActivities, detectActivities, enqueueActivities, idleActivity, t
 
 // Liga as leituras do desktop à fila. Com a ilha aberta ou oculta nada aparece:
 // o aviso já não teria onde morar e não deve esperar para surgir velho depois.
-export function useActivity(snapshot: DesktopSnapshot | null, enabled: boolean, sports: SportsSnapshot | null = null, followedTeams: string[] = [], waterNudge: { id: number } | null = null, pushed: { id: number; inputs: ActivityInput[] } | null = null): Activity | null {
+export function useActivity(snapshot: DesktopSnapshot | null, enabled: boolean, sports: SportsSnapshot | null = null, followedTeams: string[] = [], waterNudge: { id: number } | null = null, pushed: { id: number; inputs: ActivityInput[] } | null = null, mapFor?: string): Activity | null {
   const [state, setState] = useState<ActivityState>(idleActivity);
   const previous = useRef<DesktopSnapshot | null>(null);
   useEffect(() => {
@@ -20,7 +20,7 @@ export function useActivity(snapshot: DesktopSnapshot | null, enabled: boolean, 
     const before = previousSports.current;
     previousSports.current = sports;
     if (!enabled) return;
-    const found = sportsActivities(before, sports, Date.now(), followedTeams);
+    const found = sportsActivities(before, sports, Date.now(), followedTeams, mapFor);
     if (found.length) setState(value => enqueueActivities(value, found, Date.now()));
   }, [sports, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

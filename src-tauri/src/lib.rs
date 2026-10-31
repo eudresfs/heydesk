@@ -3,6 +3,7 @@ mod shell;
 mod sports;
 mod calendar;
 mod shelf;
+mod themes;
 mod recorder;
 mod cursor;
 mod system_events;
@@ -376,6 +377,13 @@ pub fn run() {
             })
             .build())
         .invoke_handler(tauri::generate_handler![
+            themes::theme_list,
+            themes::theme_read,
+            themes::theme_import_begin,
+            themes::theme_import_file,
+            themes::theme_import_commit,
+            themes::theme_import_cancel,
+            themes::theme_remove,
             load_settings,
             save_settings,
             set_hit_shape,
@@ -462,6 +470,7 @@ pub fn run() {
             app.manage(shelf::Shelf::new(app.path().app_local_data_dir()?.join("shelf")));
             app.manage(calendar::Calendars::start(app.path().app_config_dir()?.join("calendars.json")));
             app.manage(notes::NotesStore::new(app.path().app_config_dir()?.join("notes.json")));
+            app.manage(themes::Themes::new(app.path().app_config_dir()?.join("themes")));
             shell::HIDE_IN_FULLSCREEN.store(loaded.as_ref().map(|settings| settings.modules.hide_in_fullscreen).unwrap_or(true), std::sync::atomic::Ordering::Relaxed);
             // Atalhos da gravação: registrados um a um e sem derrubar o app quando outro
             // programa já usa a combinação (antes o Heydesk fechava ao abrir).

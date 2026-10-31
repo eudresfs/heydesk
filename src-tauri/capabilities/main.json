@@ -57,6 +57,13 @@
     "allow-get-desktop-status",
     "allow-get-notch-interaction",
     "allow-media-control",
+    "allow-theme-list",
+    "allow-theme-read",
+    "allow-theme-import-begin",
+    "allow-theme-import-file",
+    "allow-theme-import-commit",
+    "allow-theme-import-cancel",
+    "allow-theme-remove",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

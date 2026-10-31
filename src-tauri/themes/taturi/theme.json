@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "name": "Taturi",
+  "author": "Heydesk",
+  "images": {
+    "calm": "calm.svg",
+    "happy": "happy.svg",
+    "angry": "angry.svg",
+    "sleepy": "sleepy.svg",
+    "wide": "wide.svg",
+    "pixelated": true
+  },
+  "colors": {
+    "glow": [
+      "#a3d65c",
+      "#6f9e34",
+      "#ffb36b"
+    ]
+  }
+}

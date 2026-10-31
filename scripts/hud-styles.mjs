@@ -1,0 +1,90 @@
+// Gera os estilos de HUD embutidos (src-tauri/themes/<id>/): textura, joia das junções,
+// brasão do topo e fundo do painel, em SVG. Arte original do Heydesk; os filetes da
+// moldura são desenhados pelo app seguindo o formato do notch. Rode `node scripts/hud-styles.mjs`.
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
+const svg = (w, h, body) => `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>\n`;
+const glow = (id, blur, color) => `<filter id="${id}" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="${blur}" result="b"/><feFlood flood-color="${color}"/><feComposite in2="b" operator="in" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+const shadow = `<filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy=".8" stdDeviation=".7" flood-color="#000" flood-opacity=".75"/></filter>`;
+/** Textura que repete sem emenda: ruído fractal na cor da superfície, mais um grão fino. */
+const noise = (base, [r, g, b], { freq, octaves = 4, alpha = .38, grain = .08, seed = 3 }) => svg(128, 128,
+  `<filter id="n" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="${octaves}" seed="${seed}" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 ${r}  0 0 0 0 ${g}  0 0 0 0 ${b}  0 0 0 ${alpha * 2.2} -${alpha * .55}"/></filter>` +
+  `<filter id="g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="1" seed="${seed + 4}" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 ${grain * 3} -${grain}"/></filter>` +
+  `<rect width="128" height="128" fill="${base}"/><rect width="128" height="128" filter="url(#n)"/><rect width="128" height="128" filter="url(#g)"/>`);
+/** Joia lapidada de 20×20 (losango com facetas), usada nas junções da moldura. */
+const gem = (rim, [light, mid, dark], extra = "") => svg(20, 20, `<defs>${shadow}<linearGradient id="f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${light}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${dark}"/></linearGradient></defs>
+<g filter="url(#sh)"><polygon points="10,1.5 18.5,10 10,18.5 1.5,10" fill="${rim}"/><polygon points="10,4 16,10 10,16 4,10" fill="url(#f)"/>
+<polygon points="10,4 13,10 10,16 7,10" fill="#fff" opacity=".14"/><polygon points="10,4 13,10 7,10" fill="#fff" opacity=".35"/><circle cx="8.4" cy="7.6" r="1" fill="#fff" opacity=".85"/></g>${extra}`);
+
+const styles = {
+  reliquia: {
+    name: "Relíquia",
+    hud: { surface: "#16120d", text: "#f3e6c4", muted: "#cbba98", accent: "#d9a845", border: "#c29038", textureOpacity: .5, panelOpacity: .9, bevel: true, shimmer: true,
+      lines: [{ color: "#d9a845", inset: 5, width: 1.5 }, { color: "#8a6224", inset: 9, width: .8 }] },
+    glow: ["#d9a845", "#ff7a3d", "#ffd98a"],
+    // Pedra: grão fino e veios largos e fracos (o ruído grosso parecia fumaça).
+    texture: () => noise("#16120d", [.42, .33, .24], { freq: .085, octaves: 5, alpha: .3, grain: .11, seed: 7 }),
+    corner: () => gem("#e7c068", ["#ffc2b4", "#c8203a", "#4a0510"]),
+    crest() {
+      const gold = `<linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2c2"/><stop offset=".5" stop-color="#d9a845"/><stop offset="1" stop-color="#7a5520"/></linearGradient>`;
+      const wing = `<path d="M60 7C49 3.5 37 4.5 25 12.5C37 10.5 47 12 56.5 17.5Z" fill="url(#au)"/><path d="M57 10.5C48 9 39 10 31.5 13.5M55.5 14C47.5 13.2 41 14 35.5 16" stroke="#5a3a12" stroke-width=".8" fill="none" opacity=".75"/>`;
+      return svg(140, 32, `<defs>${gold}<linearGradient id="ruby" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffb3a6"/><stop offset=".55" stop-color="#c41f33"/><stop offset="1" stop-color="#4a0510"/></linearGradient>${shadow}${glow("r", 2.2, "#ff5a3d")}</defs>
+<g filter="url(#sh)">${wing}<g transform="matrix(-1 0 0 1 140 0)">${wing}</g>
+<polygon points="70,2.5 80.5,15.5 70,28.5 59.5,15.5" fill="url(#au)"/></g>
+<polygon points="70,5.5 77.5,15.5 70,25.5 62.5,15.5" fill="url(#ruby)" filter="url(#r)"/><polygon points="70,5.5 73.5,13 70,15.5 66.5,13" fill="#fff" opacity=".45"/>`);
+    },
+    panel: () => svg(680, 300, `<defs><radialGradient id="a" cx="340" cy="-40" r="420" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6a4a20" stop-opacity=".85"/><stop offset=".45" stop-color="#2a1d0f" stop-opacity=".45"/><stop offset="1" stop-color="#16120d" stop-opacity="0"/></radialGradient></defs>
+<rect width="680" height="300" fill="url(#a)"/><g fill="none" stroke="#d9a845" stroke-width="1">${[150, 205, 265, 335].map((r, i) => `<circle cx="340" cy="-40" r="${r}" opacity="${(.12 - i * .025).toFixed(3)}"/>`).join("")}</g>`),
+  },
+  arcano: {
+    name: "Arcano",
+    hud: { surface: "#140e1d", text: "#ece4ff", muted: "#b6a9d6", accent: "#a86bff", border: "#8a5cf0", textureOpacity: .42, panelOpacity: .95, bevel: true, shimmer: true,
+      lines: [{ color: "#a86bff", inset: 6, width: 1.2, glow: true }] },
+    glow: ["#a86bff", "#5b8cff", "#e06bff"],
+    texture: () => noise("#140e1d", [.34, .2, .4], { freq: .055, octaves: 3, seed: 11 }),
+    corner: () => svg(20, 20, `<defs>${glow("v", 1.6, "#a86bff")}<radialGradient id="p"><stop offset="0" stop-color="#fff"/><stop offset=".55" stop-color="#d4b8ff"/><stop offset="1" stop-color="#7b4bd6"/></radialGradient></defs>
+<g filter="url(#v)"><circle cx="10" cy="10" r="6.5" fill="#140e1d" stroke="#b98cff" stroke-width="1.2"/><circle cx="10" cy="10" r="3" fill="url(#p)"/></g>`),
+    crest: () => svg(140, 32, `<defs>${glow("v", 1.8, "#a86bff")}<radialGradient id="p"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#d4b8ff"/><stop offset="1" stop-color="#7b4bd6"/></radialGradient></defs>
+<g transform="translate(0 2.5)"><circle cx="70" cy="14" r="12.5" fill="#140e1d"/><g filter="url(#v)" fill="none" stroke-linecap="round"><circle cx="70" cy="14" r="12" stroke="#b98cff" stroke-width="1.4"/>
+<path d="M70 3.6L80 20.5H60Z" stroke="#7b4bd6" stroke-width=".9"/><path d="M57.5 14Q70 5 82.5 14Q70 23 57.5 14Z" stroke="#e6d4ff" stroke-width="1.2"/>
+<path d="M44 6.5H54M86 6.5H96" stroke="#a86bff" stroke-width="1.2"/></g><circle cx="70" cy="14" r="3.2" fill="url(#p)" filter="url(#v)"/></g>`),
+    panel: () => {
+      const stars = Array.from({ length: 52 }, (_, i) => { const x = (i * 137.5) % 680, y = (i * 61.7) % 300; return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${((i % 3) * .35 + .45).toFixed(2)}" opacity="${(.14 + (i % 4) * .09).toFixed(2)}"/>`; }).join("");
+      return svg(680, 300, `<defs><radialGradient id="a" cx="520" cy="40" r="300" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#6a33b8" stop-opacity=".7"/><stop offset="1" stop-color="#140e1d" stop-opacity="0"/></radialGradient><radialGradient id="b" cx="130" cy="290" r="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2a3a9a" stop-opacity=".55"/><stop offset="1" stop-color="#140e1d" stop-opacity="0"/></radialGradient></defs>
+<rect width="680" height="300" fill="url(#a)"/><rect width="680" height="300" fill="url(#b)"/><g fill="#efe4ff">${stars}</g>`);
+    },
+  },
+  neon: {
+    name: "Neon",
+    hud: { surface: "#0b0c13", text: "#eaf6ff", muted: "#a3b6ca", accent: "#ff3ea5", border: "#3cf2ff", textureOpacity: .3, panelOpacity: .95, bevel: false, shimmer: true,
+      lines: [{ color: "#3cf2ff", inset: 5, width: 1.3, glow: true }, { color: "#ff3ea5", inset: 9, width: .7 }] },
+    glow: ["#3cf2ff", "#ff3ea5", "#8b5cff"],
+    texture: () => svg(128, 128, `<filter id="n" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".004 .9" numOctaves="2" seed="5" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 .55  0 0 0 0 .62  0 0 0 0 .75  0 0 0 .6 -.25"/></filter>
+<rect width="128" height="128" fill="#0b0c13"/><rect width="128" height="128" filter="url(#n)"/><g fill="#fff" opacity=".04">${Array.from({ length: 43 }, (_, i) => `<rect y="${i * 3}" width="128" height="1"/>`).join("")}</g>`),
+    corner: () => svg(20, 20, `<defs>${glow("m", 1.4, "#ff3ea5")}</defs><g filter="url(#m)"><rect x="5" y="5" width="10" height="10" fill="#0b0c13" stroke="#ff3ea5" stroke-width="1.4" transform="rotate(45 10 10)"/><rect x="8" y="8" width="4" height="4" fill="#3cf2ff" transform="rotate(45 10 10)"/></g>`),
+    crest: () => svg(140, 32, `<defs>${glow("c", 1.6, "#3cf2ff")}${glow("m", 1.8, "#ff3ea5")}</defs>
+<g filter="url(#c)" fill="#3cf2ff">${[0, 1, 2, 3].map(i => `<rect x="${32 + i * 6}" y="4" width="3.5" height="2.5"/><rect x="${104.5 - i * 6}" y="4" width="3.5" height="2.5"/>`).join("")}</g>
+<polygon points="70,2.5 81,8.8 81,21.2 70,27.5 59,21.2 59,8.8" fill="#0b0c13" stroke="#ff3ea5" stroke-width="1.6" filter="url(#m)"/><polygon points="70,9 76,15 70,21 64,15" fill="#3cf2ff" filter="url(#c)"/>`),
+    panel: () => {
+      const v = Array.from({ length: 23 }, (_, i) => `<path d="M340 26L${i * 64 - 364} 300"/>`).join("");
+      const h = [34, 44, 58, 78, 106, 146, 206, 290].map(y => `<path d="M0 ${y}H680"/>`).join("");
+      return svg(680, 300, `<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a1050" stop-opacity=".75"/><stop offset=".3" stop-color="#140a22" stop-opacity=".25"/><stop offset="1" stop-color="#0b0c13" stop-opacity="0"/></linearGradient><linearGradient id="fade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity=".15"/></linearGradient><mask id="m"><rect width="680" height="300" fill="url(#fade)"/></mask></defs>
+<rect width="680" height="300" fill="url(#s)"/><g stroke="#ff3ea5" stroke-width=".8" opacity=".14" mask="url(#m)">${v}${h}</g>`);
+    },
+  },
+};
+
+const root = join(import.meta.dirname, "..", "src-tauri", "themes");
+for (const [id, style] of Object.entries(styles)) {
+  const dir = join(root, id);
+  mkdirSync(dir, { recursive: true });
+  rmSync(join(dir, "frame.svg"), { force: true });
+  for (const part of ["texture", "corner", "crest", "panel"]) writeFileSync(join(dir, `${part}.svg`), style[part]());
+  writeFileSync(join(dir, "theme.json"), JSON.stringify({
+    schema: 1, name: style.name, author: "Heydesk",
+    colors: { glow: style.glow },
+    hud: { ...style.hud, texture: "texture.svg", corner: "corner.svg", crest: "crest.svg", panel: "panel.svg" },
+  }, null, 2) + "\n");
+}
+console.log("estilos de HUD gerados em", root);

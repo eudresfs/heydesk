@@ -35,17 +35,28 @@ const packs: Record<SoundPack, { wave: OscillatorType; attack: number; release: 
 };
 
 let context: AudioContext | null = null;
-function audio() {
+/** Contexto de áudio compartilhado (também decodifica os sons dos temas). */
+export function audioContext() {
   if (typeof window === "undefined" || typeof window.AudioContext === "undefined") return null;
   context ??= new AudioContext();
   if (context.state === "suspended") void context.resume().catch(() => {});
   return context;
 }
 
-/** Toca um som do pacote, no volume 0–100. Silencioso se o áudio não estiver disponível. */
-export function playSound(kind: SoundKind, pack: SoundPack, volume: number) {
-  const ctx = audio();
+/** Toca um som do pacote, no volume 0–100. Com `buffer` (som do tema), toca o arquivo
+ *  no lugar da melodia sintetizada. Silencioso se o áudio não estiver disponível. */
+export function playSound(kind: SoundKind, pack: SoundPack, volume: number, buffer?: AudioBuffer) {
+  const ctx = audioContext();
   if (!ctx || volume <= 0) return;
+  if (buffer) {
+    const source = ctx.createBufferSource(), gain = ctx.createGain();
+    source.buffer = buffer;
+    gain.gain.value = Math.min(1, volume / 100) * .5;
+    source.connect(gain).connect(ctx.destination);
+    source.onended = () => gain.disconnect();
+    source.start();
+    return;
+  }
   const style = packs[pack] ?? packs.soft;
   const master = ctx.createGain();
   master.gain.value = Math.min(1, volume / 100) * style.level * .5;

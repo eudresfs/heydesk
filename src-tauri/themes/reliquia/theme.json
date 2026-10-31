@@ -1,0 +1,39 @@
+{
+  "schema": 1,
+  "name": "Relíquia",
+  "author": "Heydesk",
+  "colors": {
+    "glow": [
+      "#d9a845",
+      "#ff7a3d",
+      "#ffd98a"
+    ]
+  },
+  "hud": {
+    "surface": "#16120d",
+    "text": "#f3e6c4",
+    "muted": "#cbba98",
+    "accent": "#d9a845",
+    "border": "#c29038",
+    "textureOpacity": 0.5,
+    "panelOpacity": 0.9,
+    "bevel": true,
+    "shimmer": true,
+    "lines": [
+      {
+        "color": "#d9a845",
+        "inset": 5,
+        "width": 1.5
+      },
+      {
+        "color": "#8a6224",
+        "inset": 9,
+        "width": 0.8
+      }
+    ],
+    "texture": "texture.svg",
+    "corner": "corner.svg",
+    "crest": "crest.svg",
+    "panel": "panel.svg"
+  }
+}

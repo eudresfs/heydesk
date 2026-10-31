@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "name": "Arcano",
+  "author": "Heydesk",
+  "colors": {
+    "glow": [
+      "#a86bff",
+      "#5b8cff",
+      "#e06bff"
+    ]
+  },
+  "hud": {
+    "surface": "#140e1d",
+    "text": "#ece4ff",
+    "muted": "#b6a9d6",
+    "accent": "#a86bff",
+    "border": "#8a5cf0",
+    "textureOpacity": 0.42,
+    "panelOpacity": 0.95,
+    "bevel": true,
+    "shimmer": true,
+    "lines": [
+      {
+        "color": "#a86bff",
+        "inset": 6,
+        "width": 1.2,
+        "glow": true
+      }
+    ],
+    "texture": "texture.svg",
+    "corner": "corner.svg",
+    "crest": "crest.svg",
+    "panel": "panel.svg"
+  }
+}

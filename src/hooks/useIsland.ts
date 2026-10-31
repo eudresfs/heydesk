@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { shellEvents, type ShellBridge } from "../lib/shellBridge";
 import { BodySpringDriver, bodyTarget, compactBody, openBody, peekBody, type BodyGoal, type BodySize } from "../modules/motion/spring";
-import { containsNotchPoint, notchGeometry, notchPath } from "../modules/motion/geometry";
+import { containsNotchPoint, notchEdgePath, notchGeometry, notchPath } from "../modules/motion/geometry";
 
 export type IslandPhase = "compact" | "peek" | "open";
 export interface IslandPointer { clientX: number; clientY: number }
@@ -47,7 +47,25 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
 
   const paint = useCallback((width: number, height: number) => {
     const progress = (height - compactBody.height) / (openBody.height - compactBody.height), shape = notchGeometry(center.current, width, height);
-    surface.current?.querySelector("[data-notch-path]")?.setAttribute("d", notchPath(shape));
+    // Várias camadas seguem a mesma forma (superfície, arte do tema).
+    const d = notchPath(shape);
+    surface.current?.querySelectorAll("[data-notch-path]").forEach(path => path.setAttribute("d", d));
+    const edge = surface.current?.querySelector("[data-notch-edge]") ? notchEdgePath(shape) : "";
+    if (edge) surface.current?.querySelectorAll("[data-notch-edge]").forEach(path => path.setAttribute("d", edge));
+    // Arte do painel e ornamentos do tema acompanham o retângulo real do notch.
+    const left = shape.center - shape.width / 2;
+    surface.current?.querySelectorAll("[data-notch-box]").forEach(box => {
+      box.setAttribute("x", String(left - shape.wing)); box.setAttribute("y", "0");
+      box.setAttribute("width", String(shape.width + shape.wing * 2)); box.setAttribute("height", String(Math.max(1, height)));
+    });
+    const ornaments = surface.current?.parentElement?.querySelector<HTMLElement>(".hud-ornaments");
+    if (ornaments) {
+      ornaments.style.setProperty("--notch-left", `${left}px`);
+      ornaments.style.setProperty("--notch-width", `${shape.width}px`);
+      ornaments.style.setProperty("--notch-height", `${height}px`);
+      ornaments.style.setProperty("--notch-radius", `${shape.radius}px`);
+      ornaments.style.setProperty("--notch-wing", `${shape.wing}px`);
+    }
     if (panel.current) {
       panel.current.inert = current.current !== "open" || progress < .9;
       panel.current.style.opacity = String(clamp((progress - .6) / .3));
