@@ -58,23 +58,28 @@ pub fn watch_displays(window: WebviewWindow) {
         #[cfg(windows)]
         // A tela principal sempre começa em (0,0): um monitor novo de mesma resolução e
         // DPI parecia "igual". Por isso entram também o número de monitores e se a ilha
-        // está mesmo na tela principal (senão a ilha ficava na tela onde abriu).
+        // está mesmo na tela principal (senão a ilha ficava na tela onde abriu). Entra
+        // também onde a janela está: o Windows a move sozinho ao trocar monitores ou
+        // voltar da suspensão, e ela ficava fora do centro com a tela "igual".
         let signature = |window: &WebviewWindow| unsafe {
-            use ::windows::Win32::{Foundation::{HWND, POINT}, Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY},
-                UI::{HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI}, WindowsAndMessaging::{GetSystemMetrics, SM_CMONITORS}}};
+            use ::windows::Win32::{Foundation::{HWND, POINT, RECT}, Graphics::Gdi::{GetMonitorInfoW, MonitorFromPoint, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTOPRIMARY},
+                UI::{HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI}, WindowsAndMessaging::{GetSystemMetrics, GetWindowRect, SM_CMONITORS}}};
             let monitor = MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY);
             let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
             if !GetMonitorInfoW(monitor, &mut info).as_bool() { return None; }
             let (mut dpi, mut _y) = (0u32, 0u32);
             let _ = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi, &mut _y);
             let on_primary = window.hwnd().map(|hwnd| MonitorFromWindow(HWND(hwnd.0), MONITOR_DEFAULTTONEAREST) == monitor).unwrap_or(true);
+            let mut rect = RECT::default();
+            if let Ok(hwnd) = window.hwnd() { let _ = GetWindowRect(HWND(hwnd.0), &mut rect); }
             let (screen, work) = (info.rcMonitor, info.rcWork);
-            Some((screen.right, screen.bottom, work.left, work.top, work.right - work.left, work.bottom - work.top, dpi as u64, GetSystemMetrics(SM_CMONITORS), on_primary))
+            Some((screen.right, screen.bottom, work.left, work.top, work.right - work.left, work.bottom - work.top, dpi as u64, GetSystemMetrics(SM_CMONITORS), on_primary, (rect.left, rect.top, rect.right - rect.left)))
         };
         #[cfg(not(windows))]
         let signature = |window: &WebviewWindow| window.primary_monitor().ok().flatten().map(|monitor| {
             let area = monitor.work_area();
-            (monitor.position().x, monitor.position().y, area.position.x, area.position.y, area.size.width as i32, area.size.height as i32, monitor.scale_factor().to_bits(), 1, true)
+            let at = window.outer_position().map(|at| (at.x, at.y, 0)).unwrap_or_default();
+            (monitor.position().x, monitor.position().y, area.position.x, area.position.y, area.size.width as i32, area.size.height as i32, monitor.scale_factor().to_bits(), 1, true, at)
         });
         let mut last = signature(&window);
         let mut hidden_by_fullscreen = false;
