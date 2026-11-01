@@ -387,7 +387,7 @@ test("cota do Claude destaca o limite mais perto de acabar, com ritmo e linhas, 
   assert.match(host.textContent!, /Claude Max 5x/); assert.match(host.textContent!, /Semana · Fable/);
   assert.match(host.querySelector(".statement-row")!.textContent!, /Sessão.*30%/);
   assert.ok(host.querySelector(".pace-bar b"), "marcador de ritmo");
-  assert.equal(host.querySelectorAll(".page-dock .tick").length, 12);
+  assert.equal(host.querySelectorAll(".page-dock .tick").length, 13);
   assert.equal(host.querySelector('[role="tablist"], .panel-tabs'), null);
   assert.doesNotMatch(host.textContent!, /tokens/i);
 });
@@ -693,7 +693,7 @@ test("Escape por teclado recolhe sem esperar a mola e devolve o foco", async () 
 
 test("preferências ficam fora do ciclo contextual e Escape fecha apenas seu menu", async () => {
   const { bridge } = fakeBridge(); await mount(bridge); await click("Abrir Heydesk", "keyboard");
-  assert.deepEqual([...host.querySelectorAll('.page-ticks button, .page-dock button')].map(button => button.getAttribute('aria-label')), ["Fixar painel aberto", "Preferências", "Início", "Player", "Esportes", "Claude", "Sistema", "Tarefas", "Agenda", "Prateleira", "Teleprompter", "Água", "Nota", "Perguntar"]);
+  assert.deepEqual([...host.querySelectorAll('.page-ticks button, .page-dock button')].map(button => button.getAttribute('aria-label')), ["Fixar painel aberto", "Preferências", "Início", "Player", "Esportes", "Claude", "Sistema", "Tarefas", "Agenda", "Prateleira", "Teleprompter", "Água", "Bichinho", "Nota", "Perguntar"]);
   assert.equal(host.querySelector('[role=menu]'), null);
   await click("Preferências", "keyboard");
   assert.ok(host.querySelector('[role=menu]'));

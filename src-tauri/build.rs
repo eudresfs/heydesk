@@ -60,6 +60,12 @@ fn main() {
         "theme_import_commit",
         "theme_import_cancel",
         "theme_remove",
+        "get_autostart",
+        "set_autostart",
+        "update_check",
+        "update_install",
+        "update_dismiss",
+        "app_version",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("Não foi possível preparar o aplicativo Heydesk");

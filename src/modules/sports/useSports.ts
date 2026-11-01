@@ -164,6 +164,23 @@ export function scoreLabel(league: string, team: string, mapFor?: string) {
   if (/soccer|futebol/i.test(league)) return `Gol de ${team}`;
   return `Ponto de ${team}`;
 }
+/** Jogos seguidos que acabaram agora (estava "in", virou "post"): vitória ou derrota do time seguido. */
+export function sportsResults(previous: SportsSnapshot | null, next: SportsSnapshot | null, followedTeams: string[]): { id: string; result: "win" | "loss" }[] {
+  if (!previous || !next) return [];
+  const results: { id: string; result: "win" | "loss" }[] = [];
+  for (const game of next.games) {
+    const before = previous.games.find(item => item.id === game.id);
+    if (!game.followed || before?.state !== "in" || game.state !== "post") continue;
+    const home = Number(game.home.score ?? 0), away = Number(game.away.score ?? 0);
+    if (home === away) continue;
+    const ours = (side: typeof game.home) => followedTeams.includes(`${game.league}|${side.id}`);
+    const winner = home > away ? game.home : game.away, loser = home > away ? game.away : game.home;
+    if (ours(winner)) results.push({ id: game.id, result: "win" });
+    else if (ours(loser)) results.push({ id: game.id, result: "loss" });
+  }
+  return results;
+}
+
 /** Placar que mudou em jogo seguido vira aviso; o mascote comemora gol do time seguido. */
 export function sportsActivities(previous: SportsSnapshot | null, next: SportsSnapshot | null, now: number, followedTeams: string[], mapFor?: string): ActivityInput[] {
   if (!previous || !next) return [];

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MascotLook } from "./useMascotPresence";
+import { Hat, StageMark } from "../pet/PetGear";
+import type { PetStage } from "../pet/petSim";
 
 export type MascotExpression = "normal" | "wide" | "happy" | "sleep" | "worried" | "sleepy" | "yawn" | "wink" | "laugh" | "angry";
 
@@ -42,13 +44,15 @@ function Eyes({ expression, shape }: { expression: MascotExpression; shape: EyeS
   return <ShapedEyes shape={shape} wide={expression === "wide"} />;
 }
 
-export function Mascot({ expression, size = "small", active, reducedMotion, look = { x: 0, y: 0 }, reaction, shape = "oval", color, blink = true, bounce = true, pace = "calm", image, pixelated = true }: {
+export function Mascot({ expression, size = "small", active, reducedMotion, look = { x: 0, y: 0 }, reaction, shape = "oval", color, blink = true, bounce = true, pace = "calm", image, pixelated = true, gear }: {
   expression: MascotExpression; size?: "small" | "large"; active: boolean; reducedMotion: boolean; look?: MascotLook;
   /** Animação curta de corpo (toque, cócegas, anúncio); a chave reinicia a animação. */
   shape?: EyeShape; color?: string; blink?: boolean; bounce?: boolean; pace?: "calm" | "lively";
   reaction?: { kind: "giggle" | "tickle" | "startle" | "announce" | "away" | "back"; key: number } | null;
   /** Imagem do tema para este humor (data: URL); sem ela, os olhos vetoriais. */
   image?: string; pixelated?: boolean;
+  /** Acessório da loja do bichinho e marca do estágio (lenda). */
+  gear?: { hat?: string; stage?: PetStage };
 }) {
   const [visible, setVisible] = useState(() => !document.hidden);
   useEffect(() => {
@@ -75,13 +79,15 @@ export function Mascot({ expression, size = "small", active, reducedMotion, look
   const x = animated && Number.isFinite(look.x) ? Math.max(-3.5, Math.min(3.5, look.x)) : 0;
   const y = animated && Number.isFinite(look.y) ? Math.max(-1, Math.min(2, look.y)) : 0;
   const scale = size === "large" ? 2.07 : 1;
-  return <span className="mascot" ref={root} aria-hidden="true" data-size={size} data-expression={expression} data-animated={animated} data-reaction={animated && reaction ? reaction.kind : undefined} data-away={reaction?.kind === "away" && !animated ? "" : undefined} data-blink={blink} data-bounce={bounce} data-pace={pace} data-image={image ? "" : undefined} style={color && !image ? { color } : undefined}>
+  return <span className="mascot" ref={root} aria-hidden="true" data-size={size} data-expression={expression} data-animated={animated} data-reaction={animated && reaction ? reaction.kind : undefined} data-away={reaction?.kind === "away" && !animated ? "" : undefined} data-blink={blink} data-bounce={bounce} data-pace={pace} data-image={image ? "" : undefined} data-stage={gear?.stage} style={color && !image ? { color } : undefined}>
     <svg key={animated && reaction ? reaction.key : undefined} width={30 * scale} height={16 * scale} viewBox="0 0 30 16">
       {/* A imagem do tema ocupa o mesmo lugar dos olhos (passa um pouco da altura): olhar,
           pulos, reações e brilho continuam valendo. */}
       <g className="mascot-look" style={{ transform: `translate(${x}px, ${y}px)` }}>{image
         ? <image className="mascot-image" href={image} x="3" y="-4" width="24" height="24" preserveAspectRatio="xMidYMid meet" style={pixelated ? { imageRendering: "pixelated" } : undefined} />
         : <Eyes expression={expression} shape={shape} />}</g>
+      {gear?.hat && <Hat id={gear.hat} />}
+      <StageMark stage={gear?.stage} />
     </svg>
   </span>;
 }

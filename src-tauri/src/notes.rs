@@ -60,6 +60,51 @@ pub struct Notes {
     pub events: Vec<Event>,
     #[serde(default)]
     pub prompter: Prompter,
+    #[serde(default)]
+    pub pet: Pet,
+}
+
+/// Bichinho: barras (0–100) gravadas no último evento; a interface calcula a queda com o
+/// tempo a partir de `updated_at`. Moedas, experiência, sequência de dias e itens da loja.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Pet {
+    pub name: String,
+    pub thirst: f64, pub energy: f64, pub joy: f64, pub focus: f64,
+    /// Época Unix em ms; 0 = nunca simulado.
+    pub updated_at: i64,
+    pub xp: u32, pub coins: u32,
+    pub streak: PetStreak, pub owned: Vec<String>, pub equipped: PetGear, pub daily: PetDaily,
+    pub last_break_at: i64, pub last_pet_at: i64,
+}
+impl Default for Pet {
+    fn default() -> Self {
+        Self { name: "Nusa".into(), thirst: 70.0, energy: 80.0, joy: 70.0, focus: 60.0, updated_at: 0, xp: 0, coins: 20,
+            streak: PetStreak::default(), owned: Vec::new(), equipped: PetGear::default(), daily: PetDaily::default(), last_break_at: 0, last_pet_at: 0 }
+    }
+}
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PetStreak { pub current: u16, pub best: u16, pub last_date: String }
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PetGear { pub hat: String, pub color: String, pub scene: String }
+/// Contadores do dia (limites diários de moedas e experiência).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PetDaily { pub date: String, pub drinks: u8, pub goal_met: bool, pub minigame_coins: u16, pub pets: u8, pub focus_xp: u16, pub breaks: u8, pub credited: Vec<String> }
+
+impl Pet {
+    fn validate(&self) -> Result<(), String> {
+        let id = |value: &str| value.len() <= 24 && value.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_');
+        let ok = [self.thirst, self.energy, self.joy, self.focus].iter().all(|stat| stat.is_finite() && (0.0..=100.0).contains(stat))
+            && self.xp <= 10_000_000 && self.coins <= 1_000_000 && self.name.chars().count() <= 20 && self.streak.current <= 3650 && self.streak.best <= 3650
+            && self.owned.len() <= 50 && self.owned.iter().all(|item| !item.is_empty() && id(item))
+            && id(&self.equipped.hat) && id(&self.equipped.color) && id(&self.equipped.scene)
+            && self.daily.date.len() <= 10 && self.streak.last_date.len() <= 10
+            && self.daily.credited.len() <= 30 && self.daily.credited.iter().all(|item| item.len() <= 64);
+        if ok { Ok(()) } else { Err("Bichinho inválido.".into()) }
+    }
 }
 
 /// Teleprompter: texto, velocidade (1–10), tamanho da fonte (px) e espelhado.
@@ -83,6 +128,7 @@ impl Notes {
         if self.events.len() > 500 || self.events.iter().any(|event| event.id.is_empty() || event.id.len() > 64 || event.title.trim().is_empty() || event.title.chars().count() > 140 || event.remind_min > 1440) {
             return Err("Compromisso inválido.".into());
         }
+        self.pet.validate()?;
         for todo in &self.todos {
             if todo.id.is_empty() || todo.id.len() > 64 { return Err("Tarefa com identificador inválido.".into()); }
             let size = todo.text.chars().count();
@@ -131,6 +177,7 @@ mod tests {
         let mut notes = Notes { note: "lembrar".into(), todos: vec![Todo { id: "a".into(), text: "comprar café".into(), done: false, starred: true, created_at: 1 }], ..Default::default() };
         notes.water.log.push(Drink { at: 10, ml: 250 });
         notes.events.push(Event { id: "e".into(), title: "Dentista".into(), at: 1_000, remind_min: 10, reminders: vec![30, 15] });
+        notes.pet = Pet { xp: 120, coins: 7, owned: vec!["hat_cap".into()], equipped: PetGear { hat: "hat_cap".into(), ..Default::default() }, updated_at: 5, ..Pet::default() };
         store.save(notes.clone()).unwrap();
         assert_eq!(store.load().unwrap(), notes);
         let _ = fs::remove_dir_all(dir);
@@ -143,9 +190,21 @@ mod tests {
         assert!(store.save(Notes { note: "x".repeat(MAX_NOTE + 1), ..Default::default() }).is_err());
         assert!(store.save(Notes { water: Water { goal_ml: 0, ..Water::default() }, ..Default::default() }).is_err());
         assert!(store.save(Notes { todos: vec![Todo { id: "a".into(), text: String::new(), ..Default::default() }], ..Default::default() }).is_err());
+        assert!(store.save(Notes { pet: Pet { thirst: 101.0, ..Pet::default() }, ..Default::default() }).is_err());
+        assert!(store.save(Notes { pet: Pet { name: "x".repeat(21), ..Pet::default() }, ..Default::default() }).is_err());
+        assert!(store.save(Notes { pet: Pet { owned: vec!["Chapéu!".into()], ..Pet::default() }, ..Default::default() }).is_err());
+        assert!(store.save(Notes { pet: Pet { joy: f64::NAN, ..Pet::default() }, ..Default::default() }).is_err());
         assert_eq!(store.load().unwrap().note, "ok");
         fs::write(&store.path, b"{nope").unwrap();
         assert!(store.load().is_err());
         let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn notes_without_pet_load_the_default_pet() {
+        let notes: Notes = serde_json::from_str(r#"{"note":"a","todos":[]}"#).unwrap();
+        assert_eq!(notes.pet, Pet::default());
+        assert_eq!(notes.pet.name, "Nusa");
+        assert_eq!(notes.pet.coins, 20);
     }
 }

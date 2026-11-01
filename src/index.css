@@ -811,6 +811,62 @@ html[data-view=cursor], html[data-view=cursor] body { background: transparent !i
 .water-card-actions { grid-column: 2; display: flex; gap: 6px; justify-content: flex-end; }
 .water-card-actions button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-pill); font: inherit; font-size: 12px; font-weight: 650; white-space: nowrap; cursor: pointer; transition: background var(--t-fast), scale var(--t-fast); }
 .water-card-actions button:active { scale: .96; }
+/* Bichinho: barras à esquerda, nome/nível/ações à direita; loja e mini-jogos ocupam a página. */
+.pet-page { display: grid; grid-template-columns: minmax(0, 1fr) 196px; gap: 16px; height: 100%; align-items: center; min-width: 0; }
+.pet-page.pet-center, .pet-page:has(> .pet-game), .pet-page[aria-label=Loja] { display: flex; flex-direction: column; gap: 8px; align-items: stretch; justify-content: center; }
+.pet-center { align-items: center !important; text-align: center; }
+.pet-bars { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.pet-bar { display: grid; grid-template-columns: 82px minmax(0, 1fr); align-items: center; gap: 8px; font-size: var(--fs-meta); color: var(--text-muted); }
+.pet-bar-label { display: inline-flex; align-items: center; gap: 6px; }
+.pet-track-bar, .pet-xp { position: relative; display: block; height: 7px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+.pet-track-bar i, .pet-xp i { position: absolute; inset: 0; border-radius: inherit; background: var(--primary); transform-origin: left; transition: transform 320ms var(--ease-out); }
+.pet-bar[data-low] { color: var(--warn); }
+.pet-bar[data-low] .pet-track-bar i { background: var(--warn); }
+.pet-xp { height: 4px; }
+.pet-xp i { background: var(--info); }
+.pet-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; position: relative; }
+.pet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pet-name { padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: var(--fs-title); font-weight: 650; cursor: text; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pet-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pet-name-input { width: 120px; height: 24px; padding: 0 6px; border: 1px solid var(--input-border); border-radius: 6px; background: var(--input-bg); color: var(--text); font: inherit; font-size: var(--fs-body); }
+.pet-coins { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-body); font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text); }
+.pet-level, .pet-muted { font-size: var(--fs-meta); color: var(--text-muted); }
+.pet-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-top: 2px; }
+.pet-center .pet-actions { display: flex; }
+.pet-actions .chip, .pet-card .chip { justify-content: center; }
+.pet-gain { position: absolute; right: 0; bottom: -20px; font-size: var(--fs-micro); color: var(--ok); white-space: nowrap; animation: pet-gain 2.4s var(--ease-out) both; }
+@keyframes pet-gain { 0% { opacity: 0; transform: translateY(4px); } 12%, 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-4px); } }
+.pet-title { font-size: var(--fs-title); }
+.pet-big { font-size: 22px; font-weight: 650; }
+.pet-games { display: flex; gap: 8px; width: 100%; }
+.pet-pick { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--surface-1); box-shadow: var(--ring); color: var(--text-muted); font: inherit; font-size: var(--fs-meta); text-align: left; cursor: pointer; }
+.pet-pick b { color: var(--text); font-size: var(--fs-body); }
+.pet-pick:hover { background: var(--surface-2); }
+.pet-shop-head { display: flex; align-items: center; gap: 10px; }
+.pet-shop-head b { flex: 1; font-size: var(--fs-body); }
+.pet-shop { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.pet-card { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; border-radius: 10px; background: var(--surface-1); box-shadow: var(--ring); font-size: var(--fs-meta); min-width: 0; }
+.pet-card b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pet-card[data-equipped] { box-shadow: inset 0 0 0 1.5px var(--primary); }
+.pet-card .chip { gap: 4px; height: 24px; }
+.pet-game { display: flex; flex-direction: column; gap: 8px; outline: none; cursor: pointer; }
+.pet-game:focus-visible .pet-track, .pet-game:focus-visible .pet-lanes { box-shadow: 0 0 0 1.5px var(--focus); }
+.pet-game-head { display: flex; justify-content: space-between; font-size: var(--fs-body); }
+.pet-game-head span, .pet-game-hint { color: var(--text-muted); font-size: var(--fs-meta); font-variant-numeric: tabular-nums; }
+.pet-track { position: relative; height: 26px; border-radius: 8px; background: var(--surface-1); box-shadow: var(--ring); }
+.pet-zone { position: absolute; top: 3px; bottom: 3px; width: 18%; border-radius: 6px; background: color-mix(in srgb, var(--info) 35%, transparent); }
+.pet-zone[data-flash] { animation: pet-flash 300ms var(--ease-out); }
+@keyframes pet-flash { from { background: var(--ok); } }
+.pet-marker { position: absolute; top: 2px; left: 2px; width: 4px; height: 22px; border-radius: 2px; background: var(--text); }
+.pet-lanes { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); height: 92px; border-radius: 8px; background: var(--surface-1); box-shadow: var(--ring); }
+.pet-lane { display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; border-right: 1px solid var(--island-border); color: var(--text-faint); font-size: var(--fs-micro); }
+.pet-lane:last-of-type { border-right: 0; }
+.pet-drop { position: absolute; top: 2px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; background: none; color: var(--info); cursor: pointer; }
+.pet-drop svg { width: 20px; height: 20px; fill: currentColor; }
+.mascot-hat, .mascot-sparkle { pointer-events: none; }
+/* Aviso de atualização: mesmo cartão do lembrete de água; durante o download, barra de progresso. */
+.update-progress { align-self: center; width: 150px; height: 6px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+.update-progress i { display: block; height: 100%; background: var(--primary); transform-origin: left; transition: transform 240ms var(--ease-out); }
 .water-no { background: var(--surface-2); color: var(--text-muted); }
 .water-no:hover { background: var(--surface-3); color: var(--text); }
 .water-yes { background: var(--info); color: #06121f; }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
-import type { CalendarEvent, Notes, Prompter, Todo, Water } from "./types";
+import type { CalendarEvent, Notes, Pet, Prompter, Todo, Water } from "./types";
 import { SNOOZE_MIN } from "./waterPlan";
+import { apply as applyPet, defaultPet, windowOf, type PetEvent } from "../pet/petSim";
 
 export const defaultPrompter: Prompter = { text: "", speed: 4, size: 26, mirror: false, opacity: 100, height: 300 };
 export const defaultWater: Water = { goalMl: 2000, cupMl: 250, reminders: true, intervalMin: 60, log: [], snoozeUntil: 0, bottleMl: 500, bottleLeftMl: 500, startMin: 540, endMin: 1020, days: [1, 2, 3, 4, 5], snooze: true, skips: [], askAt: 0 };
@@ -79,8 +80,10 @@ export function useNotes(bridge: ShellBridge) {
     if (!bridge.onDesktopEvent) return;
     let stop: (() => void) | undefined, alive = true;
     void bridge.onDesktopEvent("notes:changed", payload => {
-      const next = payload as Notes;
+      let next = payload as Notes;
       if (timer.current || JSON.stringify(next) === JSON.stringify(latest.current)) return;
+      // A outra janela grava com a cópia dela do bichinho: fica o mais novo.
+      if ((latest.current.pet?.updatedAt ?? 0) > (next.pet?.updatedAt ?? 0)) next = { ...next, pet: latest.current.pet };
       latest.current = next; setNotes(next);
     }).then(fn => { if (alive) stop = fn; else fn(); });
     return () => { alive = false; stop?.(); };
@@ -88,6 +91,12 @@ export function useNotes(bridge: ShellBridge) {
   // Sair do app com a nota pendente: grava o que estiver na fila.
   useEffect(() => () => { if (timer.current) { window.clearTimeout(timer.current); persist(latest.current); } }, [persist]);
   const current = () => latest.current;
+  /** Bichinho depois de um ou mais eventos (mesma gravação do que os causou). */
+  const fed = (notes: Notes, events: PetEvent[], now: number): Pet => {
+    let pet = notes.pet ?? defaultPet;
+    for (const event of events) pet = applyPet(pet, event, windowOf(notes.water), now).pet;
+    return pet;
+  };
   return {
     notes, state, error,
     setNote: (note: string) => update({ ...current(), note }, 600),
@@ -107,7 +116,11 @@ export function useNotes(bridge: ShellBridge) {
     drink: (ml?: number) => {
       const water = current().water ?? defaultWater, now = Date.now(), sip = ml ?? water.cupMl;
       const left = Math.max(0, (water.bottleLeftMl ?? water.bottleMl ?? 500) - sip);
-      update({ ...current(), water: { ...water, snoozeUntil: 0, askAt: 0, bottleLeftMl: left, log: [...water.log.filter(drink => now - drink.at < 7 * 86_400_000), { at: now, ml: sip }] } });
+      const nextWater = { ...water, snoozeUntil: 0, askAt: 0, bottleLeftMl: left, log: [...water.log.filter(drink => now - drink.at < 7 * 86_400_000), { at: now, ml: sip }] };
+      // O gole mata a sede do bichinho; bater a meta rende o bônus do dia.
+      const events: PetEvent[] = [{ kind: "drink", ml: sip, cupMl: water.cupMl }];
+      if (waterToday(nextWater, now) >= nextWater.goalMl) events.push({ kind: "goalMet" });
+      update({ ...current(), water: nextWater, pet: fed({ ...current(), water: nextWater }, events, now) });
     },
     /** Garrafa cheia de novo; logo em seguida o lembrete já pede o gole. */
     refillWater: () => { const water = current().water ?? defaultWater; update({ ...current(), water: { ...water, bottleLeftMl: water.bottleMl ?? 500, snoozeUntil: 0, askAt: Date.now() } }); },
@@ -115,8 +128,18 @@ export function useNotes(bridge: ShellBridge) {
     refuseWater: () => {
       const water = current().water ?? defaultWater, now = Date.now();
       const skips = [...(water.skips ?? []).filter(time => now - time < 86_400_000), now].slice(-50);
-      update({ ...current(), water: { ...water, skips, askAt: 0, snoozeUntil: water.snooze ?? true ? now + SNOOZE_MIN * 60_000 : 0 } });
+      update({ ...current(), water: { ...water, skips, askAt: 0, snoozeUntil: water.snooze ?? true ? now + SNOOZE_MIN * 60_000 : 0 }, pet: fed(current(), [{ kind: "refuse" }], now) });
     },
+    pet: notes.pet ?? defaultPet,
+    /** Evento do bichinho (carinho, mini-jogo, loja…) gravado na hora. */
+    petEvent: (event: PetEvent) => {
+      const now = Date.now(), base = current();
+      const result = applyPet(base.pet ?? defaultPet, event, windowOf(base.water), now);
+      update({ ...base, pet: result.pet });
+      return result.gain;
+    },
+    /** Grava só a virada do dia / queda acumulada (sem evento). */
+    setPet: (pet: Pet) => update({ ...current(), pet }),
     undoDrink: () => {
       const water = current().water ?? defaultWater, last = water.log[water.log.length - 1];
       update({ ...current(), water: { ...water, log: water.log.slice(0, -1), bottleLeftMl: Math.min(water.bottleMl ?? 500, (water.bottleLeftMl ?? 0) + (last?.ml ?? 0)) } });

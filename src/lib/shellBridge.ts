@@ -73,7 +73,7 @@ export interface ShellBridge {
   askCancel?(): Promise<void>;
   getMediaArt?(): Promise<string | null>;
   /** Eventos do Windows (volume, rede, notificações) emitidos pelo backend na hora. */
-  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section" | "notes:changed" | "hltv:live" | "hltv:status", callback: (payload: unknown) => void): Promise<() => void>;
+  onDesktopEvent?(name: "desktop:volume" | "desktop:network" | "desktop:notification" | "shelf:changed" | "recorder:state" | "recorder:hotkey" | "camera:closed" | "shell:occluded" | "settings:changed" | "settings:section" | "notes:changed" | "hltv:live" | "hltv:status" | "app:update" | "app:update-progress", callback: (payload: unknown) => void): Promise<() => void>;
   configureNotifications?(enabled: boolean, apps: string[]): Promise<string>;
   /** Windows em silêncio (Não perturbe/tela cheia), melhor esforço. */
   getQuiet?(): Promise<boolean>;
@@ -122,7 +122,18 @@ export interface ShellBridge {
   /** Copia uma pasta escolhida para os temas; devolve o id criado. */
   themeImport?(files: File[], folder: string): Promise<string>;
   themeRemove?(id: string): Promise<void>;
+  /** Iniciar com o Windows. */
+  getAutostart?(): Promise<boolean>;
+  setAutostart?(on: boolean): Promise<boolean>;
+  /** Procura versão nova agora (não instala). */
+  updateCheck?(): Promise<UpdateInfo>;
+  /** Baixa, instala e reabre o Heydesk. */
+  updateInstall?(): Promise<void>;
+  /** "Depois": cala o aviso dessa versão por 24 h. */
+  updateDismiss?(version: string): Promise<void>;
+  appVersion?(): Promise<string>;
 }
+export interface UpdateInfo { current: string; version: string | null; notes: string | null }
 
 // Cancelar mata o processo; o processo morto não envia "done", então o pedido em
 // curso é encerrado aqui.
@@ -209,6 +220,12 @@ export function createShellBridge(): ShellBridge {
       } catch (error) { void invoke("theme_import_cancel", { token }).catch(() => {}); throw error; }
     },
     themeRemove: id => invoke("theme_remove", { id }),
+    getAutostart: () => invoke("get_autostart"),
+    setAutostart: on => invoke("set_autostart", { on }),
+    updateCheck: () => invoke("update_check"),
+    updateInstall: () => invoke("update_install"),
+    updateDismiss: version => invoke("update_dismiss", { version }),
+    appVersion: () => invoke("app_version"),
     askCancel: async () => { cancelAsk?.(); await invoke<void>("ask_cancel"); },
     saveNotes: notes => invoke<Notes>("save_notes", { notes }),
     getKeepAwake: () => invoke<boolean>("get_keep_awake"),

@@ -3,7 +3,7 @@
 // (src-tauri/themes); o usuário importa os dele para %APPDATA%\dev.heydesk.app\themes\<id>.
 // Tudo chega ao webview inline (data: URL e base64): sem protocolo de arquivos nem CSP nova.
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, path::{Path, PathBuf}, sync::Mutex, time::{Duration, Instant}};
+use std::{collections::BTreeMap, path::PathBuf, sync::Mutex, time::{Duration, Instant}};
 
 const MAX_MANIFEST: usize = 64 * 1024;
 const MAX_IMAGE: usize = 2 * 1024 * 1024;
@@ -403,7 +403,7 @@ mod tests {
 
     const PNG: &[u8] = b"\x89PNG\r\n\x1a\n0000";
     fn manifest(extra: &str) -> String { format!(r#"{{"schema":1,"name":"Teste","images":{{"calm":"a.png","happy":"a.png","angry":"a.png","sleepy":"a.png"}}{extra}}}"#) }
-    fn pack(dir: &Path, json: &str) { std::fs::create_dir_all(dir).unwrap(); std::fs::write(dir.join("theme.json"), json).unwrap(); std::fs::write(dir.join("a.png"), PNG).unwrap(); }
+    fn pack(dir: &std::path::Path, json: &str) { std::fs::create_dir_all(dir).unwrap(); std::fs::write(dir.join("theme.json"), json).unwrap(); std::fs::write(dir.join("a.png"), PNG).unwrap(); }
 
     #[test]
     fn built_ins_are_listed_and_eyes_has_no_images() {

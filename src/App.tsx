@@ -11,13 +11,16 @@ import { useMascotPresence } from "./modules/context/useMascotPresence";
 import { usePageMotion } from "./modules/motion/usePageMotion";
 import { WheelPaging } from "./modules/navigation/wheelPaging";
 import { useActivity, useActivityPush } from "./modules/activity/useActivity";
+import { noteLine, useUpdate } from "./modules/update/useUpdate";
+import { usePet } from "./modules/pet/usePet";
+import { colorOf } from "./modules/pet/petSim";
 import { toastHeight, toastView } from "./modules/activity/activity";
 import type { Activity } from "./modules/activity/activity";
 import { useMascotTouch } from "./modules/context/useMascotTouch";
 import { defaultReminders, dueReminders, useNotes } from "./modules/context/useNotes";
 import { waterCopy, waterPlan } from "./modules/context/waterPlan";
 import { useAsk } from "./modules/context/useAsk";
-import { useSports, bestStream, csMapScore, csSide } from "./modules/sports/useSports";
+import { useSports, bestStream, csMapScore, csSide, sportsResults } from "./modules/sports/useSports";
 import { useStoredFlag } from "./lib/storedFlag";
 import { useCalendars } from "./modules/context/useCalendars";
 import { fileSize, useShelf } from "./modules/context/useShelf";
@@ -39,7 +42,7 @@ export const homeSize = { width: 640, height: 280 } as const;
 /** Teleprompter: mais alto, para várias linhas abaixo da câmera. */
 const prompterSize = { width: 600, height: 300 } as const;
 const settingsPageIds: ContextPage[] = ["appearance", "modules", "pagesPrefs", "mascotPrefs", "soundPrefs", "sportsPrefs", "calendarPrefs", "waterPrefs"];
-const allContextPages: ContextPage[] = ["home", "media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "note", "ask"];
+const allContextPages: ContextPage[] = ["home", "media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "pet", "note", "ask"];
 function editableTarget(target: EventTarget | null) {
   return target instanceof Element && Boolean(target.closest('input, select, textarea, [contenteditable]:not([contenteditable=false])'));
 }
@@ -65,6 +68,7 @@ const pageIcons: Partial<Record<ContextPage, string>> = {
   shelf: "M4 13l2-8h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5",
   prompter: "M4 4h16a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM7.5 8h9M8.5 11h7M10 14h4M12 17v3M8 20h8",
   water: "M12 3s-6 6.6-6 11a6 6 0 0 0 12 0c0-4.4-6-11-6-11z",
+  pet: "M12 13c-3 0-5.5 2.4-5.5 4.6 0 1.6 1.4 2.4 3 2.4 1 0 1.7-.5 2.5-.5s1.5.5 2.5.5c1.6 0 3-.8 3-2.4C17.5 15.4 15 13 12 13zM6.5 11.5a1.8 2.3 0 1 0 0-.01M17.5 11.5a1.8 2.3 0 1 0 0-.01M9.5 7.5a1.8 2.3 0 1 0 0-.01M14.5 7.5a1.8 2.3 0 1 0 0-.01",
   note: "M6 3h9l4 4v14H6zM9 12h7M9 16h5",
   ask: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z",
 };
@@ -238,6 +242,11 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     sports.watch(stream.embed);
   }, [pipAuto, liveGame?.id, sports.csLive?.gameId, sports.csLive?.streams?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const waterShow = waterPending && !activity && !island.hidden;
+  // Versão nova: aviso com "Atualizar" / "Depois" no notch fechado (a água tem prioridade).
+  const update = useUpdate(bridge, true);
+  const updateInfo = update.state.kind === "available" || update.state.kind === "installing" ? update.state.info : update.state.kind === "error" ? update.state.info : undefined;
+  const updateShow = Boolean(updateInfo) && !waterShow && !activity && !island.hidden;
+  useEffect(() => { (window as unknown as { heydeskPreviewUpdate?: (version?: string) => void }).heydeskPreviewUpdate = (version = "9.9.9") => update.preview({ current: "0.5.0", version, notes: "Prévia do aviso de atualização." }); }, [update.preview]);
   // Bebeu depois de um lembrete: o mascote se acalma e agradece por alguns segundos.
   const [waterThanks, setWaterThanks] = useState<{ level: number; key: number } | null>(null);
   useEffect(() => { if (!waterThanks) return; const timer = window.setTimeout(() => setWaterThanks(null), THANKS_MS); return () => window.clearTimeout(timer); }, [waterThanks]);
@@ -256,7 +265,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const recNow = useNow(recorder.busy, 500);
   const recShow = recorder.busy && !toast;
   const countShow = recorder.countdown != null;
-  useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast ? { width: 372, height: toastHeight } : waterShow || thanksShow ? { width: 404, height: 104 } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, thanksShow, recShow, countShow]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setActivitySize(countShow ? { width: 220, height: toastHeight } : toast ? { width: 372, height: toastHeight } : waterShow || thanksShow || updateShow ? { width: 404, height: 104 } : recShow ? { width: 250, height: 32 } : activity ? { width: activity.width, height: 32 } : liveGame ? { width: 320, height: 32 } : singing ? { width: 380, height: 32 } : null); }, [activity?.width, activity?.id, Boolean(liveGame), singing, waterShow, thanksShow, recShow, countShow, updateShow]); // eslint-disable-line react-hooks/exhaustive-deps
   // Clicar no notch com a água pendente abre direto na página Água.
   // Abrir o painel: lembrete de água pendente leva à Água; jogo seguido ao vivo, aos Esportes.
   useEffect(() => {
@@ -273,11 +282,47 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     return () => window.clearTimeout(timer);
   }, [activity?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const mascotTouch = useMascotTouch(island.expanded && !island.hidden);
-  useEffect(() => { const kind = mascotTouch.touch.reaction?.kind; if (kind === "giggle" || kind === "tickle") play("giggle"); else if (mascotTouch.touch.expression === "wink") play("tap"); }, [mascotTouch.touch.reaction?.key, mascotTouch.touch.expression]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Bichinho: só com a página ativa em Páginas; humor, chapéu e eventos saem daqui.
+  const playRef = useRef<(kind: SoundKind) => void>(() => {});
+  const petControl = usePet(notes, { enabled: contextPages.includes("pet"), now: waterTick, react: mascotTouch.react, play: kind => playRef.current(kind) });
+  const petGear = petControl.enabled ? { hat: petControl.view.equipped.hat || undefined, stage: petControl.stage } : undefined;
+  const petColor = petControl.enabled ? colorOf(petControl.view.equipped.color) : undefined;
+  useEffect(() => {
+    const kind = mascotTouch.touch.reaction?.kind;
+    if (kind === "giggle" || kind === "tickle") { play("giggle"); petControl.event({ kind: "petting" }); }
+    else if (mascotTouch.touch.expression === "wink") play("tap");
+  }, [mascotTouch.touch.reaction?.key, mascotTouch.touch.expression]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Time seguido venceu ou perdeu: alegria do bichinho (uma vez por jogo).
+  const lastSports = useRef(sports.snapshot);
+  useEffect(() => {
+    const before = lastSports.current;
+    lastSports.current = sports.snapshot;
+    for (const { id, result } of sportsResults(before, sports.snapshot, sports.config?.teams ?? [])) petControl.event({ kind: result === "win" ? "teamWin" : "teamLoss", id });
+  }, [sports.snapshot]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Gravação de 3 min ou mais vira foco do bichinho.
+  const recording = useRef<{ state: string; at: number; elapsed: number }>({ state: "idle", at: 0, elapsed: 0 });
+  useEffect(() => {
+    const before = recording.current, now = recorder.state;
+    if ((before.state === "recording" || before.state === "paused") && (now.state === "idle" || now.state === "saving") && before.elapsed >= 180_000) {
+      petControl.event({ kind: "focus", minutes: Math.round(before.elapsed / 60_000), id: `rec:${before.at}` });
+    }
+    recording.current = { state: now.state, at: before.state === "idle" ? Date.now() : before.at, elapsed: Math.max(before.elapsed * (before.state === "idle" ? 0 : 1), now.elapsedMs ?? 0) };
+  }, [recorder.state.state, recorder.state.elapsedMs]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Voltou depois de 5 min ou mais longe do PC: pausa (energia).
+  const restSince = useRef(0);
+  useEffect(() => {
+    if (presence.phase === "rest") { if (!restSince.current) restSince.current = Date.now(); return; }
+    if (presence.phase === "greeting" && restSince.current) {
+      const minutes = (Date.now() - restSince.current) / 60_000;
+      if (minutes >= 5) petControl.event({ kind: "break", minutes: Math.round(minutes) });
+    }
+    if (presence.phase !== "drowsy") restSince.current = 0;
+  }, [presence.phase]); // eslint-disable-line react-hooks/exhaustive-deps
   const resting = presence.phase === "rest" && !activity;
   const hour = new Date().getHours(), night = hour >= 22 || hour < 6;
   const compactExpression: MascotExpression = activity ? (glance ? "wide" : activity.mood)
-    : resting ? "sleep" : presence.phase === "drowsy" ? "yawn" : island.hovered || presence.phase !== "context" ? "wide" : playing ? "happy" : night ? "sleepy" : "normal";
+    : resting ? "sleep" : presence.phase === "drowsy" ? "yawn" : island.hovered || presence.phase !== "context" ? "wide"
+    : petControl.enabled && petControl.mood.critical ? petControl.mood.expression : playing ? "happy" : night ? "sleepy" : "normal";
   // Ao acordar e de vez em quando, os olhos acompanham o cursor por alguns segundos.
   const gaze = useMascotGaze(bridge, presence.phase, settings.loadState === "ready" && !island.expanded && !away && !reducedMotion && settings.draft.mascot?.look !== false);
   const compactLook = activity && glance ? { x: -3.5, y: 0 } : gaze ?? presence.look;
@@ -289,7 +334,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     if (trackShow) { hadTrack.current = true; return; }
     if (hadTrack.current) { hadTrack.current = false; setMascotBack(value => value + 1); }
   }, [Boolean(trackShow)]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openExpression: MascotExpression = page === "water" && waterPending ? waterMood : page === "media" && playing ? "happy" : page === "limits" && quotaLow(context) ? "worried" : "normal";
+  // Na página do bichinho o humor dele aparece (a água brava continua vencendo).
+  const openExpression: MascotExpression = (page === "water" || page === "pet") && waterPending ? waterMood : page === "pet" ? petControl.mood.expression : page === "media" && playing ? "happy" : page === "limits" && quotaLow(context) ? "worried" : "normal";
 
   useEffect(() => {
     if (!island.focusTarget) return;
@@ -313,6 +359,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     if (now - quietCache.current.at < 10_000) { if (!quietCache.current.quiet) go(); return; }
     void bridge.getQuiet().then(quiet => { quietCache.current = { at: Date.now(), quiet }; if (!quiet) go(); }).catch(go);
   }, [bridge]);
+  playRef.current = play;
   const lastContextPage = useRef<ContextPage>("home");
   if (contextPages.includes(page)) lastContextPage.current = page;
   useEffect(() => {
@@ -356,7 +403,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const feedback = !bridge.desktop ? "Salvar no aplicativo desktop." : settings.loadState === "loading" ? "Carregando…" : settings.loadState === "error" ? "Falha ao carregar." : settings.saveState === "error" ? "Falha ao salvar. Rascunho preservado." : settings.saveState === "saving" ? "Salvando…" : settings.saveState === "saved" ? "Configurações salvas." : settings.dirty ? "Alterações não salvas." : "";
   const pageIndex = contextPages.indexOf(page);
 
-  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due))) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toast || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
+  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toast || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
     onMouseMove={island.pointerMove} onMouseLeave={island.pointerLeave}
     onBlurCapture={event => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
@@ -420,12 +467,12 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {theme.hud.crest && <i className="hud-crest" />}
     </span>}
     {island.viewportExpanded && <section className="panel" data-tall={askTall && page === "ask" || undefined} data-no-face={mascotPrefs.inPanel === false || undefined} data-home={page === "home" || undefined} data-prompter={page === "prompter" || undefined} ref={island.panelRef} tabIndex={-1} aria-labelledby="panel-heading" aria-hidden={!island.expanded}>
-      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} {...themed((mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression)} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
+      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} {...themed((mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression)} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
       <form className={`page-form ${preferences && page !== "sportsPrefs" && page !== "calendarPrefs" || settings.loadState === "error" || island.error ? "with-footer" : ""}`} onSubmit={submit}>
         <h1 id="panel-heading" className="sr-only" ref={heading} tabIndex={-1}>{pageNames[page]}</h1>
         <div className="page-viewport" ref={pageMotion.ref}>
-          {pageMotion.previous && <div className="page-layer" key={`old-${pageMotion.previous}`} data-page-layer="outgoing" aria-hidden="true" ref={node => { if (node) node.inert = true; }}><ContextPages page={pageMotion.previous} bridge={bridge} settings={settings} context={context} editable={false} setColorPickerActive={() => {}} awake={awake} notes={notes} sports={sports} calendars={calendars} shelf={shelf} recorder={recorder} notificationStatus={notificationStatus} ask={{ ...assistant, tall: askTall, setTall: () => {} }} ghost /></div>}
-          <div className="page-layer" key={pageMotion.current} data-page-layer="incoming"><ContextPages page={pageMotion.current} bridge={bridge} settings={settings} context={context} editable={editable} setColorPickerActive={setColorPickerActive} awake={awake} notes={notes} sports={sports} calendars={calendars} shelf={shelf} recorder={recorder} notificationStatus={notificationStatus} ask={{ ...assistant, tall: askTall, setTall: setAskTall }} go={next => selectPage(next, false, contextPages.indexOf(next) >= contextPages.indexOf(page) ? 1 : -1)} /></div>
+          {pageMotion.previous && <div className="page-layer" key={`old-${pageMotion.previous}`} data-page-layer="outgoing" aria-hidden="true" ref={node => { if (node) node.inert = true; }}><ContextPages page={pageMotion.previous} bridge={bridge} settings={settings} context={context} editable={false} setColorPickerActive={() => {}} awake={awake} notes={notes} pet={petControl} reducedMotion={reducedMotion} sports={sports} calendars={calendars} shelf={shelf} recorder={recorder} notificationStatus={notificationStatus} ask={{ ...assistant, tall: askTall, setTall: () => {} }} ghost /></div>}
+          <div className="page-layer" key={pageMotion.current} data-page-layer="incoming"><ContextPages page={pageMotion.current} bridge={bridge} settings={settings} context={context} editable={editable} setColorPickerActive={setColorPickerActive} awake={awake} notes={notes} pet={petControl} reducedMotion={reducedMotion} sports={sports} calendars={calendars} shelf={shelf} recorder={recorder} notificationStatus={notificationStatus} ask={{ ...assistant, tall: askTall, setTall: setAskTall }} go={next => selectPage(next, false, contextPages.indexOf(next) >= contextPages.indexOf(page) ? 1 : -1)} /></div>
         </div>
         {(preferences && page !== "sportsPrefs" && page !== "calendarPrefs" || settings.loadState === "error" || island.error) && <footer className="panel-footer"><div className="feedback" aria-live="polite"><span role={island.error || settings.saveState === "error" || settings.loadState === "error" ? "alert" : undefined}>{island.error || feedback}</span></div>{settings.loadState === "error" ? <button type="button" className="text-button" onClick={() => void settings.load()}>Tentar novamente</button> : preferences && <button className="save-button" type="submit" aria-label="Salvar alterações" disabled={!editable} aria-disabled={!editable || !settings.dirty || settings.saveState === "saving"}>Salvar</button>}</footer>}
       </form>
@@ -466,7 +513,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.away)}>{teamTag(liveGame.away)}</b>
         <span className="score-logo">{liveGame.away.logo ? <img src={liveGame.away.logo} alt="" /> : liveGame.away.name.slice(0, 1)}</span>
       </span>}
-      {!activity && (liveGame || waterShow) ? null : trackShow || singing ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
+      {!activity && (liveGame || waterShow) ? null : trackShow || singing ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} shape={mascotPrefs.eyeShape} color={petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
       {singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
       {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.label} — ${trackShow.value}`}><b>{trackShow.label}</b><span>{trackShow.value}</span></span>}
       {waterShow ? <span className="compact-side compact-right compact-water"><span className="water-pill">abrir</span></span>
@@ -491,5 +538,17 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <button type="button" className="water-yes" onClick={() => { if (waterNow.due === "refill") { notes.refillWater(); return; } notes.drink(); setWaterThanks({ level: waterLevel, key: Date.now() }); }}>{copy.yes}</button>
       </span>
     </div>)(themeWater(waterCopy(waterNow, notes.water, waterTick), waterNow.level, theme.copy?.water))}
+    {updateShow && updateInfo && !thanksShow && !toast && !countShow && !island.expanded && <div className="water-card update-card" role="alertdialog" aria-label={`Versão ${updateInfo.version} disponível`} data-kind="update">
+      <span className="water-card-face"><Mascot expression={update.state.kind === "installing" ? "wide" : "happy"} {...themed(update.state.kind === "installing" ? "wide" : "happy")} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
+      <span className="toast-text">
+        <b>{update.state.kind === "installing" ? `Atualizando para ${updateInfo.version}…` : `Heydesk ${updateInfo.version} disponível`}</b>
+        <span>{update.state.kind === "installing" ? (update.state.percent ? `Baixando: ${update.state.percent}%. O Heydesk reabre sozinho.` : "Preparando o download…") : update.state.kind === "error" ? update.state.message : noteLine(updateInfo.notes) || `Você está na ${updateInfo.current}.`}</span>
+      </span>
+      <span className="water-card-actions">
+        {update.state.kind === "installing" ? <span className="update-progress" role="progressbar" aria-valuenow={update.state.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ transform: `scaleX(${update.state.percent / 100})` }} /></span>
+          : <><button type="button" className="water-no" onClick={update.dismiss}>Depois</button>
+            <button type="button" className="water-yes" onClick={() => void update.install()}>{update.state.kind === "error" ? "Tentar de novo" : "Atualizar"}</button></>}
+      </span>
+    </div>}
   <Tooltips /></main>;
 }

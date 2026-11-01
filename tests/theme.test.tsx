@@ -7,6 +7,16 @@ import { Mascot, type MascotExpression } from "../src/modules/context/Mascot";
 import { hudStyle, moodImage, themeWater } from "../src/modules/theme/useTheme";
 import { scoreLabel } from "../src/modules/sports/useSports";
 import { playSound } from "../src/modules/sound/sounds";
+import { noteLine } from "../src/modules/update/useUpdate";
+
+test("aviso de atualização usa a primeira linha útil das notas, curta", () => {
+  assert.equal(noteLine("## Novidades\n\n- Temas do mascote"), "Novidades");
+  assert.equal(noteLine("\n\n- Temas do mascote e HUD"), "Temas do mascote e HUD");
+  assert.equal(noteLine(null), "");
+  const long = noteLine("x".repeat(200));
+  assert.equal(long.length, 108);
+  assert.ok(long.endsWith("…"));
+});
 
 const dom = new Window({ url: "http://localhost" });
 Object.assign(globalThis, { window: dom, document: dom.document, HTMLElement: dom.HTMLElement, Element: dom.Element, Node: dom.Node, IS_REACT_ACT_ENVIRONMENT: true });

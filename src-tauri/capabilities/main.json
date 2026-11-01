@@ -64,6 +64,12 @@
     "allow-theme-import-commit",
     "allow-theme-import-cancel",
     "allow-theme-remove",
+    "allow-get-autostart",
+    "allow-set-autostart",
+    "allow-update-check",
+    "allow-update-install",
+    "allow-update-dismiss",
+    "allow-app-version",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

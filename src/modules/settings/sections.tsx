@@ -7,6 +7,7 @@ import type { SportsControl, TeamOption } from "../sports/useSports";
 import type { useSettings } from "../../hooks/useSettings";
 import { defaultMascot, defaultSounds, type MascotSettings, type SoundSettings, type ThemeSummary } from "../../lib/shellBridge";
 import { forgetTheme, moodImage, useTheme, type ActiveTheme } from "../theme/useTheme";
+import { noteLine, useUpdate } from "../update/useUpdate";
 
 const noBridge = { desktop: false } as ShellBridge;
 import { eyeColors, glowNames, glowPresets, optionalPages, orderPages, pageNames, shapes } from "../context/ContextPages";
@@ -98,6 +99,44 @@ function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: st
       </span>
     </Row>
   </Group>;
+}
+
+/** Geral: iniciar com o Windows e atualizações (salva na hora, sem o botão Salvar). */
+export function GeneralSection({ bridge }: { bridge: ShellBridge }) {
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [autostartError, setAutostartError] = useState<string | null>(null);
+  const [version, setVersion] = useState("");
+  const update = useUpdate(bridge, false);
+  useEffect(() => {
+    void bridge.getAutostart?.().then(setAutostart).catch(() => setAutostart(false));
+    void bridge.appVersion?.().then(setVersion).catch(() => {});
+  }, [bridge]);
+  const toggle = (on: boolean) => {
+    setAutostartError(null);
+    void bridge.setAutostart?.(on).then(setAutostart).catch(reason => setAutostartError(typeof reason === "string" ? reason : "Não foi possível mudar o início com o Windows."));
+  };
+  const state = update.state;
+  const status = state.kind === "checking" ? "Procurando…"
+    : state.kind === "none" ? `Você já está na versão mais nova (${state.current}).`
+    : state.kind === "available" ? `Versão ${state.info.version} disponível.${noteLine(state.info.notes) ? ` ${noteLine(state.info.notes)}` : ""}`
+    : state.kind === "installing" ? `Baixando ${state.info.version}${state.percent ? `: ${state.percent}%` : "…"} O Heydesk reabre sozinho ao terminar.`
+    : state.kind === "error" ? state.message : "Ao abrir, o Heydesk instala sozinho a versão nova. Aberto, procura a cada 30 minutos e pergunta antes de instalar.";
+  return <>
+    <Group title="Sistema">
+      <Row title="Iniciar com o Windows" desc={autostartError ? <span role="alert">{autostartError}</span> : "Abre o Heydesk quando você entra no Windows."}>
+        <Toggle label="Iniciar com o Windows" on={autostart === true} onChange={toggle} />
+      </Row>
+    </Group>
+    <Group title="Atualizações">
+      <Row title={version ? `Heydesk ${version}` : "Heydesk"} desc={<span role={state.kind === "error" ? "alert" : "status"}>{status}</span>}>
+        <span className="set-actions">
+          {state.kind === "available" || (state.kind === "error" && state.info)
+            ? <button type="button" className="set-button set-primary" onClick={() => void update.install()}>{state.kind === "error" ? "Tentar de novo" : "Atualizar agora"}</button>
+            : <button type="button" className="set-button" disabled={state.kind === "checking" || state.kind === "installing"} onClick={() => void update.check()}>Procurar atualização</button>}
+        </span>
+      </Row>
+    </Group>
+  </>;
 }
 
 /** Aparência e mascote numa seção só: a prévia mostra tudo junto. */

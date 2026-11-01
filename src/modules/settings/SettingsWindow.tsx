@@ -8,9 +8,10 @@ import type { ContextPage } from "../context/ContextPages";
 import { useCalendars } from "../context/useCalendars";
 import { useSports } from "../sports/useSports";
 import { useNotes } from "../context/useNotes";
-import { AppearanceSection, CalendarsSection, PagesSection, SoundSection, SportsSection, WaterSection } from "./sections";
+import { AppearanceSection, CalendarsSection, GeneralSection, PagesSection, SoundSection, SportsSection, WaterSection } from "./sections";
 
 export const settingsSections: { page: ContextPage; label: string; hint: string }[] = [
+  { page: "generalPrefs", label: "Geral", hint: "Iniciar com o Windows, versão e atualizações." },
   { page: "appearance", label: "Aparência", hint: "Ilha, cores, animações e o mascote." },
   { page: "pagesPrefs", label: "Páginas", hint: "Quais páginas aparecem, em que ordem e o que fica no notch fechado." },
   { page: "soundPrefs", label: "Sons", hint: "Volume, estilo e quando tocar." },
@@ -20,8 +21,8 @@ export const settingsSections: { page: ContextPage; label: string; hint: string 
 ];
 // Seções antigas apontam para as que as absorveram.
 const aliases: Partial<Record<string, ContextPage>> = { mascotPrefs: "appearance", modules: "pagesPrefs" };
-// Esportes e Agendas salvam sozinhos; o resto usa o botão Salvar.
-const selfSaving: ContextPage[] = ["sportsPrefs", "calendarPrefs", "waterPrefs"];
+// Geral, Esportes e Agendas salvam sozinhos; o resto usa o botão Salvar.
+const selfSaving: ContextPage[] = ["generalPrefs", "sportsPrefs", "calendarPrefs", "waterPrefs"];
 const pick = (value: string | null): ContextPage => settingsSections.find(section => section.page === (aliases[value ?? ""] ?? value))?.page ?? "appearance";
 
 export function SettingsWindow() {
@@ -58,7 +59,8 @@ export function SettingsWindow() {
       <div className="settings-body" key={section}>
         {settings.loadState === "loading" ? <p className="settings-status">Carregando…</p>
           : <fieldset className="set-fieldset" disabled={!ready && !selfSaving.includes(section)}>
-            {section === "appearance" ? <AppearanceSection settings={settings} bridge={bridge} />
+            {section === "generalPrefs" ? <GeneralSection bridge={bridge} />
+              : section === "appearance" ? <AppearanceSection settings={settings} bridge={bridge} />
               : section === "soundPrefs" ? <SoundSection settings={settings} />
               : section === "pagesPrefs" ? <PagesSection settings={settings} />
               : section === "waterPrefs" ? <WaterSection notes={notes} />

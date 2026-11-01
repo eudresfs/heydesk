@@ -16,11 +16,13 @@ import { playSound } from "../sound/sounds";
 import { setLyricsOn, useLyricsOn } from "./lyricsStore";
 import { SportsPage, SportsPreferences } from "../sports/SportsPages";
 import type { SportsControl } from "../sports/useSports";
+import { PetPage } from "../pet/PetPage";
+import type { PetControl } from "../pet/usePet";
 import type { ClaudeLimit, CodexQuotaSnapshot, LyricLine, Lyrics, MediaAction, MediaStatus, QuotaWindow } from "./types";
 
 // Hora e clima ficam só no compacto; aberto, o rolo tem Início, Player, Claude,
 // Sistema, Tarefas e Nota.
-export const pageNames = { home: "Início", media: "Player", limits: "Claude", system: "Sistema", tasks: "Tarefas", agenda: "Agenda", shelf: "Prateleira", prompter: "Teleprompter", water: "Água", note: "Nota", ask: "Perguntar", sports: "Esportes", sportsPrefs: "Preferências de esportes", calendarPrefs: "Agendas", waterPrefs: "Ajustes da água", pagesPrefs: "Páginas", mascotPrefs: "Mascote", soundPrefs: "Sons", appearance: "Aparência", modules: "Módulos" } as const;
+export const pageNames = { home: "Início", media: "Player", limits: "Claude", system: "Sistema", tasks: "Tarefas", agenda: "Agenda", shelf: "Prateleira", prompter: "Teleprompter", water: "Água", pet: "Bichinho", note: "Nota", ask: "Perguntar", sports: "Esportes", sportsPrefs: "Preferências de esportes", calendarPrefs: "Agendas", generalPrefs: "Geral", waterPrefs: "Ajustes da água", pagesPrefs: "Páginas", mascotPrefs: "Mascote", soundPrefs: "Sons", appearance: "Aparência", modules: "Módulos" } as const;
 export type ContextPage = keyof typeof pageNames;
 export function weatherLabel(code: number | null) {
   if (code == null) return "Condição indisponível";
@@ -532,7 +534,7 @@ function ShelfPage({ shelf }: { shelf?: ShelfControl }) {
 }
 
 /** Páginas que aparecem no ciclo do notch; Início fica sempre. */
-export const optionalPages = ["media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "note", "ask"] as const;
+export const optionalPages = ["media", "sports", "limits", "system", "tasks", "agenda", "shelf", "prompter", "water", "pet", "note", "ask"] as const;
 /** Ordem salva aplicada às páginas: Início sempre primeiro; as que não estão na
  * ordem salva (páginas novas) entram na posição padrão, depois das ordenadas. */
 export function orderPages<T extends string>(pages: readonly T[], order: readonly string[] = []): T[] {
@@ -773,9 +775,10 @@ function SoundPrefs({ settings, editable }: { settings: ReturnType<typeof useSet
   </fieldset>;
 }
 
-export function ContextPages({ page, bridge, settings, context, editable, setColorPickerActive, awake, notes, ask, sports, go, notificationStatus, calendars, shelf, recorder, ghost }: {
+export function ContextPages({ page, bridge, settings, context, editable, setColorPickerActive, awake, notes, ask, sports, go, notificationStatus, calendars, shelf, recorder, ghost, pet, reducedMotion = false }: {
   page: ContextPage; bridge: ShellBridge; settings: ReturnType<typeof useSettings>; context: ReturnType<typeof useContextSnapshots>; editable: boolean; setColorPickerActive(active: boolean): void;
   awake?: KeepAwakeControl; notes?: NotesControl; ask?: AskControl & { tall: boolean; setTall(value: boolean): void }; sports?: SportsControl; go?(page: ContextPage): void; notificationStatus?: string; calendars?: CalendarsControl; shelf?: ShelfControl; recorder?: RecorderControl; ghost?: boolean;
+  pet?: PetControl; reducedMotion?: boolean;
 }) {
   const saved = settings.saved.modules;
   const data = context.desktop.value;
@@ -783,6 +786,7 @@ export function ContextPages({ page, bridge, settings, context, editable, setCol
   if (page === "tasks") return <Tasks notes={notes} />;
   if (page === "note") return <QuickNote notes={notes} />;
   if (page === "water") return <WaterPage notes={notes} />;
+  if (page === "pet") return <PetPage pet={pet} reducedMotion={reducedMotion} />;
   if (page === "prompter") return <PrompterPage notes={notes} recorder={recorder} ghost={ghost} />;
   if (page === "shelf") return <ShelfPage shelf={shelf} />;
   if (page === "agenda") return <Agenda notes={notes} calendars={calendars} onConfigure={() => go?.("calendarPrefs")} />;

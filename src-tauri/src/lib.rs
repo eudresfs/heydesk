@@ -4,6 +4,7 @@ mod sports;
 mod calendar;
 mod shelf;
 mod themes;
+mod autostart;
 mod recorder;
 mod cursor;
 mod system_events;
@@ -384,6 +385,12 @@ pub fn run() {
             themes::theme_import_commit,
             themes::theme_import_cancel,
             themes::theme_remove,
+            autostart::get_autostart,
+            autostart::set_autostart,
+            updater::update_check,
+            updater::update_install,
+            updater::update_dismiss,
+            updater::app_version,
             load_settings,
             save_settings,
             set_hit_shape,
@@ -480,8 +487,12 @@ pub fn run() {
                     if let Err(error) = app.global_shortcut().register(shortcut) { eprintln!("[Heydesk] Atalho {shortcut} indisponível: {error}"); }
                 }
             }
-            // Só o app instalado (release) procura versões novas.
-            if !cfg!(debug_assertions) { updater::start(app.handle().clone()); }
+            app.manage(updater::Updater::default());
+            // Só o app instalado (release) procura versões novas sozinho e liga o início com o Windows.
+            if !cfg!(debug_assertions) {
+                updater::start(app.handle().clone());
+                autostart::first_run(&app.path().app_config_dir()?);
+            }
             shell::setup(app)
         })
         .on_window_event(|window, event| {
