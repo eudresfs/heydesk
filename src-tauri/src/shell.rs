@@ -118,7 +118,11 @@ fn follow_fullscreen(window: &WebviewWindow, hidden: bool) -> bool {
             && MonitorFromWindow(foreground, MONITOR_DEFAULTTONULL) == MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY)
     };
     let wanted = busy && HIDE_IN_FULLSCREEN.load(std::sync::atomic::Ordering::Relaxed);
+    let mut hidden = hidden;
     unsafe {
+        // Algo reexibiu a ilha que esta rotina escondeu: o frontend ainda a acha oculta e
+        // deixaria avisos congelados. Ressincroniza; se a tela cheia continua, esconde de novo abaixo.
+        if hidden && IsWindowVisible(island).as_bool() { let _ = window.emit(SHELL_OCCLUDED_EVENT, false); hidden = false; }
         // O frontend pausa leituras e animações enquanto a ilha está escondida.
         if wanted && !hidden && IsWindowVisible(island).as_bool() { let _ = ShowWindow(island, SW_HIDE); let _ = window.emit(SHELL_OCCLUDED_EVENT, true); return true; }
         if !wanted && hidden { let _ = ShowWindow(island, SW_SHOWNOACTIVATE); let _ = window.emit(SHELL_OCCLUDED_EVENT, false); return false; }

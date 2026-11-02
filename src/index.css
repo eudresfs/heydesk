@@ -1173,6 +1173,9 @@ html[data-view=pip], html[data-view=pip] body { background: #000 !important; ove
 .pip-menu small { color: var(--text-faint); font-size: 10.5px; }
 /* Notch escondido (tela cheia, bandeja): animações paradas; nada pinta sem ninguém ver. */
 .shell[data-away] *, .shell[data-away] *::before, .shell[data-away] *::after { animation-play-state: paused !important; }
+/* Avisos com botões nunca ficam congelados no 1º quadro da entrada (opacidade 0): se a ilha
+   reaparecer antes de `away` sair, o cartão estaria vazio. Rodar escondido não pinta nada. */
+.shell[data-away] :is(.water-card, .toast), .shell[data-away] :is(.water-card, .toast) * { animation-play-state: running !important; }
 /* Tema com HUD: a coluna do pin/engrenagem recua para não ficar sob as joias do filete,
    e o brasão fica atrás do conteúdo do painel (não cobre texto nem campos). */
 .shell[data-hud] .page-ticks { padding-right: 12px; }

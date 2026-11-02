@@ -1,6 +1,6 @@
 [package]
 name = "heydesk"
-version = "0.6.2"
+version = "0.6.3"
 description = "Shell local de desktop do Heydesk"
 authors = ["Heydesk contributors"]
 license = "MIT"
