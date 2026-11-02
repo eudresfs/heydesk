@@ -163,13 +163,15 @@ impl Hltv {
         let Ok(mut state) = self.state.lock() else { return };
         match report {
             Report::Schedule { matches } => {
-                let games: Vec<Game> = matches.iter().filter(|item| !item.id.is_empty() && !item.team1.name.is_empty() && !item.team2.name.is_empty()).map(to_game).collect();
+                // O relato vem de JS numa página de terceiros: ids numéricos, nomes curtos, lista limitada.
+                let games: Vec<Game> = matches.iter().take(300).filter(|item| valid_match(item)).map(to_game).collect();
                 state.schedule = games.clone();
                 if let Ok(mut schedule) = SCHEDULE.lock() { *schedule = Some(games.clone()); }
                 if let Some(sports) = app.try_state::<crate::sports::Sports>() { sports.merge(LEAGUE, games); }
             }
             Report::Score { mut score } => {
                 let Some(game_id) = state.game.clone() else { return };
+                sanitize_score(&mut score);
                 if state.last.is_none() { status(app, &game_id, "live"); }
                 score.game_id = game_id;
                 if state.last.as_ref() != Some(&score) { state.last = Some(score.clone()); let _ = app.emit(LIVE_EVENT, Some(score)); }
@@ -202,6 +204,27 @@ pub fn watch(app: AppHandle) {
     });
 }
 
+fn numeric_id(id: &str) -> bool { !id.is_empty() && id.len() <= 12 && id.bytes().all(|b| b.is_ascii_digit()) }
+fn short_text(text: &str, max: usize) -> bool { text.chars().count() <= max }
+
+/// Partida da lista aceitável: id numérico (vai na URL da página), times com id numérico e nomes curtos.
+pub(crate) fn valid_match(item: &ListedMatch) -> bool {
+    numeric_id(&item.id) && !item.team1.name.is_empty() && !item.team2.name.is_empty()
+        && [&item.team1, &item.team2].iter().all(|team| (team.id.is_empty() || numeric_id(&team.id)) && short_text(&team.name, 60))
+        && short_text(&item.event, 120) && short_text(&item.stage, 80) && short_text(&item.format, 8)
+}
+
+/// Só transmissões de YouTube, Twitch e Kick no formato de embed; listas e textos limitados.
+pub(crate) fn sanitize_score(score: &mut LiveRounds) {
+    let embed_ok = |url: &str| url.len() <= 300 && url.parse::<tauri::Url>().is_ok_and(|parsed| parsed.scheme() == "https"
+        && matches!(parsed.host_str(), Some("www.youtube.com" | "player.twitch.tv" | "player.kick.com")) && parsed.username().is_empty() && parsed.port().is_none());
+    score.streams.retain(|stream| embed_ok(&stream.embed) && short_text(&stream.name, 80));
+    score.streams.truncate(20);
+    score.history.truncate(40);
+    score.maps.truncate(7);
+    score.map.truncate(40); score.ct_team.truncate(60); score.t_team.truncate(60); score.phase.truncate(40);
+}
+
 /// Avisa a interface e guarda o último estado (quem abrir depois também vê).
 fn status(app: &AppHandle, game_id: &str, state: &str) {
     let value = serde_json::json!({ "gameId": game_id, "state": state });
@@ -216,9 +239,13 @@ fn open(app: &AppHandle, label: &'static str, url: &str) {
     let app = app.clone();
     // Criar janela fora da thread de quem chamou (evita travar a thread principal no Windows).
     tauri::async_runtime::spawn(async move {
+        // Presa ao hltv.org: anúncio ou redirect não leva a janela invisível para outro site,
+        // e pop-ups são recusados.
         let built = WebviewWindowBuilder::new(&app, label, WebviewUrl::External(parsed))
             .title("HLTV").visible(false).skip_taskbar(true).focused(false).inner_size(1100.0, 900.0)
             .initialization_script(SCRIPT)
+            .on_navigation(|url| url.scheme() == "https" && url.host_str() == Some("www.hltv.org"))
+            .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
             .build();
         if let Err(error) = built { eprintln!("[Heydesk] Janela do HLTV: {error}"); }
     });

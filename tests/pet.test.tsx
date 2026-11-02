@@ -33,16 +33,22 @@ test("nível e estágio nas fronteiras", () => {
   assert.deepEqual([1, 5, 12, 25].map(stageOf), ["filhote", "jovem", "adulto", "lenda"]);
 });
 
-test("gole rende só nos 12 primeiros do dia; sede sobe sempre", () => {
+test("gole rende a cada 10 min e só nos 12 primeiros do dia; a água sobe sempre", () => {
+  const gap = 11 * 60_000;
   let current = project(pet(), window, monday10);
   let gain;
-  for (let i = 0; i < 12; i++) ({ pet: current, gain } = apply(current, { kind: "drink", ml: 250, cupMl: 250 }, window, monday10 + i));
+  for (let i = 0; i < 12; i++) ({ pet: current, gain } = apply(current, { kind: "drink", ml: 250, cupMl: 250 }, window, monday10 + i * gap));
   assert.equal(gain!.xp, 5);
-  const thirst = current.thirst;
-  ({ pet: current, gain } = apply({ ...current, thirst: 10 }, { kind: "drink", ml: 250, cupMl: 250 }, window, monday10 + 20));
+  ({ pet: current, gain } = apply({ ...current, thirst: 10 }, { kind: "drink", ml: 250, cupMl: 250 }, window, monday10 + 12 * gap));
   assert.equal(gain.xp, 0);
   assert.equal(gain.capped, "drinks");
-  assert.ok(current.thirst > 10 && thirst >= 0);
+  assert.ok(current.thirst > 10);
+  // Dois goles seguidos: o segundo registra a água, mas não rende (clique repetido não é farm).
+  const first = apply(project(pet(), window, monday10), { kind: "drink", ml: 250, cupMl: 250 }, window, monday10);
+  const spam = apply(first.pet, { kind: "drink", ml: 250, cupMl: 250 }, window, monday10 + 1000);
+  assert.equal(spam.gain.xp, 0);
+  assert.equal(spam.gain.capped, "soon");
+  assert.ok(spam.pet.thirst > first.pet.thirst);
 });
 
 test("sequência pula o fim de semana e quebra em dia útil sem meta", () => {
@@ -50,20 +56,43 @@ test("sequência pula o fim de semana e quebra em dia útil sem meta", () => {
   const friday = pet({ streak: { current: 3, best: 3, lastDate: "2026-10-30" }, daily: { ...defaultPet.daily, date: "2026-10-30", goalMet: true }, updatedAt: at(2026, 10, 30, 18) });
   const { pet: monday, gain } = apply(friday, { kind: "goalMet" }, window, monday10);
   assert.equal(monday.streak.current, 4);
-  assert.equal(gain.xp, 60);
+  assert.equal(gain.xp, 80, "meta (40) + sequência 4 (20) + missão (20)");
+  // Meta no sábado: bônus sem mexer na sequência; segunda continua de sexta.
+  const saturday = apply(pet({ streak: { current: 3, best: 3, lastDate: "2026-10-30" }, updatedAt: at(2026, 10, 31, 10), daily: { ...defaultPet.daily, date: "2026-10-31" } }), { kind: "goalMet" }, window, at(2026, 10, 31, 11));
+  assert.equal(saturday.pet.streak.lastDate, "2026-10-30");
+  assert.equal(apply(saturday.pet, { kind: "goalMet" }, window, monday10).pet.streak.current, 4);
   const missedTuesday = project(pet({ ...monday, daily: { ...monday.daily, goalMet: false, date: "2026-11-03" }, streak: { ...monday.streak }, updatedAt: at(2026, 11, 3, 18) }), window, at(2026, 11, 4, 10));
   assert.equal(missedTuesday.streak.current, 0);
   assert.equal(missedTuesday.daily.date, dayKey(at(2026, 11, 4, 10)));
 });
 
-test("mini-jogo para de dar moedas depois de 40 no dia", () => {
+test("mini-jogo: no máximo 90 XP e 40 moedas por dia; prêmio cresce com a pontuação", () => {
   let current = project(pet(), window, monday10), gain;
-  for (let i = 0; i < 4; i++) ({ pet: current, gain } = apply(current, { kind: "minigame", game: "gota", score: 60 }, window, monday10 + i));
+  assert.equal(apply(current, { kind: "minigame", game: "gota", score: 40 }, window, monday10).gain.xp, 30, "40 pts → 10 XP + missão do dia (20)");
+  for (let i = 0; i < 4; i++) ({ pet: current, gain } = apply(current, { kind: "minigame", game: "gota", score: 120 }, window, monday10 + i));
   assert.equal(current.daily.minigameCoins, 40);
-  ({ pet: current, gain } = apply(current, { kind: "minigame", game: "gota", score: 60 }, window, monday10 + 9));
+  assert.equal(current.daily.minigameXp, 90);
+  ({ pet: current, gain } = apply(current, { kind: "minigame", game: "gota", score: 120 }, window, monday10 + 9));
   assert.equal(gain.coins, 0);
+  assert.equal(gain.xp, 0);
   assert.equal(gain.capped, "minigame");
-  assert.equal(gain.xp, 30);
+});
+
+test("queda passiva para em 30; recusa pesa 1 vez por hora; missões abrem o baú", () => {
+  const away = project(pet({ thirst: 50, joy: 50, focus: 50, updatedAt: monday10 - 5 * 86_400_000 }), window, monday10);
+  assert.equal(away.thirst, 30);
+  assert.equal(away.joy, 30);
+  assert.ok(away.focus > 30, "foco recupera à noite");
+  const once = apply(project(pet(), window, monday10), { kind: "refuse" }, window, monday10);
+  const again = apply(once.pet, { kind: "refuse" }, window, monday10 + 60_000);
+  assert.equal(Math.round(once.pet.joy), 67);
+  assert.equal(Math.round(again.pet.joy), 67, "a segunda recusa na mesma hora não pesa de novo");
+  let current = project(pet(), window, monday10), gain;
+  ({ pet: current } = apply(current, { kind: "goalMet" }, window, monday10));
+  ({ pet: current } = apply(current, { kind: "break", minutes: 10 }, window, monday10 + 1000));
+  ({ pet: current, gain } = apply(current, { kind: "minigame", game: "gole", score: 40 }, window, monday10 + 2000));
+  assert.equal(gain.mission, "Jogar uma partida");
+  assert.equal(gain.coins, 4 + 5 + 15, "jogo (4) + missão (5) + baú (15)");
 });
 
 test("carinho tem intervalo de 3 s; loja exige moedas e nível", () => {

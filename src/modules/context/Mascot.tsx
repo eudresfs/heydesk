@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { MascotLook } from "./useMascotPresence";
+import type { LookSource } from "./useMascotTouch";
 import { Hat, StageMark } from "../pet/PetGear";
 import type { PetStage } from "../pet/petSim";
 
@@ -33,7 +34,7 @@ function Eyes({ expression, shape }: { expression: MascotExpression; shape: EyeS
     <path d="M20 9.5Q23.5 6.5 27 9.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
   </g>;
   if (expression === "worried") return <g>
-    <ellipse cx="6.5" cy="9.6" rx="3.5" ry="4.6" fill="currentColor" /><ellipse cx="23.5" cy="9.6" rx="3.5" ry="4.6" fill="currentColor" />
+    <ellipse className="mascot-eye" cx="6.5" cy="9.6" rx="3.5" ry="4.6" fill="currentColor" /><ellipse className="mascot-eye" cx="23.5" cy="9.6" rx="3.5" ry="4.6" fill="currentColor" />
     <path d="M2.6 3.4l7 1.8M27.4 3.4l-7 1.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
   </g>;
   // Bravo (lembrete de água ignorado): topo dos olhos cortado em diagonal, descendo para o centro.
@@ -44,8 +45,12 @@ function Eyes({ expression, shape }: { expression: MascotExpression; shape: EyeS
   return <ShapedEyes shape={shape} wide={expression === "wide"} />;
 }
 
-export function Mascot({ expression, size = "small", active, reducedMotion, look = { x: 0, y: 0 }, reaction, shape = "oval", color, blink = true, bounce = true, pace = "calm", image, pixelated = true, gear }: {
+const bounded = (look: MascotLook) => ({ x: Number.isFinite(look.x) ? Math.max(-3.5, Math.min(3.5, look.x)) : 0, y: Number.isFinite(look.y) ? Math.max(-1, Math.min(2, look.y)) : 0 });
+
+export function Mascot({ expression, size = "small", active, reducedMotion, look = { x: 0, y: 0 }, follow, reaction, shape = "oval", color, blink = true, bounce = true, pace = "calm", image, pixelated = true, gear }: {
   expression: MascotExpression; size?: "small" | "large"; active: boolean; reducedMotion: boolean; look?: MascotLook;
+  /** Olhar que muda a cada movimento do cursor: escrito direto no DOM, sem rerenderizar quem usa o mascote. */
+  follow?: LookSource;
   /** Animação curta de corpo (toque, cócegas, anúncio); a chave reinicia a animação. */
   shape?: EyeShape; color?: string; blink?: boolean; bounce?: boolean; pace?: "calm" | "lively";
   reaction?: { kind: "giggle" | "tickle" | "startle" | "announce" | "away" | "back"; key: number } | null;
@@ -76,17 +81,38 @@ export function Mascot({ expression, size = "small", active, reducedMotion, look
     schedule();
     return () => { window.clearTimeout(timer); root.current?.removeAttribute("data-blinking"); };
   }, [animated, blink, pace]);
-  const x = animated && Number.isFinite(look.x) ? Math.max(-3.5, Math.min(3.5, look.x)) : 0;
-  const y = animated && Number.isFinite(look.y) ? Math.max(-1, Math.min(2, look.y)) : 0;
+  // Troca de humor no meio de uma piscada (~90 ms de olho fechado) em vez de um corte seco.
+  const [drawn, setDrawn] = useState(expression);
+  useEffect(() => {
+    if (drawn === expression) return;
+    if (!animated || !blink) { setDrawn(expression); return; }
+    root.current?.setAttribute("data-swapping", "");
+    const swap = window.setTimeout(() => setDrawn(expression), 90);
+    const done = window.setTimeout(() => root.current?.removeAttribute("data-swapping"), 180);
+    return () => { window.clearTimeout(swap); window.clearTimeout(done); root.current?.removeAttribute("data-swapping"); };
+  }, [expression, animated, blink]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = animated && blink ? drawn : expression;
+  const lookNode = useRef<SVGGElement>(null);
+  const moving = useRef(animated);
+  moving.current = animated;
+  const { x, y } = animated ? bounded(follow ? follow.get() : look) : { x: 0, y: 0 };
+  const place = (value: MascotLook) => {
+    const next = moving.current ? bounded(value) : { x: 0, y: 0 };
+    if (lookNode.current) lookNode.current.style.transform = `translate(${next.x}px, ${next.y}px)`;
+  };
+  useEffect(() => follow?.subscribe(place), [follow]); // eslint-disable-line react-hooks/exhaustive-deps
+  // O React só reescreve o estilo quando a prop muda; depois de amostras escritas por fora,
+  // cada render reafirma a posição (ao trocar de fonte não fica o último olhar velho).
+  useEffect(() => { place(follow ? follow.get() : look); });
   const scale = size === "large" ? 2.07 : 1;
   return <span className="mascot" ref={root} aria-hidden="true" data-size={size} data-expression={expression} data-animated={animated} data-reaction={animated && reaction ? reaction.kind : undefined} data-away={reaction?.kind === "away" && !animated ? "" : undefined} data-blink={blink} data-bounce={bounce} data-pace={pace} data-image={image ? "" : undefined} data-stage={gear?.stage} style={color && !image ? { color } : undefined}>
     <svg key={animated && reaction ? reaction.key : undefined} width={30 * scale} height={16 * scale} viewBox="0 0 30 16">
       {/* A imagem do tema ocupa o mesmo lugar dos olhos (passa um pouco da altura): olhar,
           pulos, reações e brilho continuam valendo. */}
-      <g className="mascot-look" style={{ transform: `translate(${x}px, ${y}px)` }}>{image
+      <g className="mascot-look" ref={lookNode} style={{ transform: `translate(${x}px, ${y}px)` }}>{image
         ? <image className="mascot-image" href={image} x="3" y="-4" width="24" height="24" preserveAspectRatio="xMidYMid meet" style={pixelated ? { imageRendering: "pixelated" } : undefined} />
-        : <Eyes expression={expression} shape={shape} />}</g>
-      {gear?.hat && <Hat id={gear.hat} />}
+        : <Eyes expression={shown} shape={shape} />}</g>
+      {gear?.hat && !image && <Hat id={gear.hat} />}
       <StageMark stage={gear?.stage} />
     </svg>
   </span>;

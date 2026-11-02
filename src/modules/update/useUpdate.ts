@@ -11,7 +11,15 @@ export type UpdateState =
   | { kind: "installing"; info: UpdateInfo; percent: number }
   | { kind: "error"; message: string; info?: UpdateInfo };
 
-const message = (reason: unknown) => typeof reason === "string" ? reason : reason instanceof Error ? reason.message : "Não foi possível falar com o servidor de atualizações.";
+/** Erro do atualizador em português (o plugin responde em inglês). */
+const message = (reason: unknown) => {
+  const raw = typeof reason === "string" ? reason : reason instanceof Error ? reason.message : "";
+  if (/grava|gravação/i.test(raw)) return raw;
+  if (/signature|minisign|verify/i.test(raw)) return "A atualização baixada não passou na verificação de assinatura. Nada foi instalado.";
+  if (/network|connect|dns|timed? ?out|request|fetch|http/i.test(raw)) return "Sem conexão com o servidor de atualizações. Tente mais tarde.";
+  if (/Nenhuma atualização/i.test(raw)) return raw;
+  return raw ? "Não foi possível instalar a atualização. Tente de novo mais tarde." : "Não foi possível falar com o servidor de atualizações.";
+};
 
 /** `announce`: o notch quer saber das versões achadas pela busca automática. */
 export function useUpdate(bridge: ShellBridge, announce: boolean) {
@@ -21,7 +29,11 @@ export function useUpdate(bridge: ShellBridge, announce: boolean) {
     const stops: (() => void)[] = []; let alive = true;
     const keep = (stop: () => void) => { if (alive) stops.push(stop); else stop(); };
     if (announce) void bridge.onDesktopEvent("app:update", payload => setState({ kind: "available", info: payload as UpdateInfo })).then(keep);
-    void bridge.onDesktopEvent("app:update-progress", payload => setState(current => current.kind === "available" || current.kind === "installing" ? { kind: "installing", info: current.info, percent: Number(payload) || 0 } : current)).then(keep);
+    void bridge.onDesktopEvent("app:update-progress", payload => setState(current => {
+      const percent = Number(payload) || 0;
+      if (current.kind === "installing" && current.percent === percent) return current;
+      return current.kind === "available" || current.kind === "installing" ? { kind: "installing", info: current.info, percent } : current;
+    })).then(keep);
     return () => { alive = false; stops.forEach(stop => stop()); };
   }, [bridge, announce]);
   const check = useCallback(async () => {
@@ -40,7 +52,9 @@ export function useUpdate(bridge: ShellBridge, announce: boolean) {
     try { await bridge.updateInstall(); } catch (reason) { setState({ kind: "error", message: message(reason), info }); }
   }, [bridge, state]);
   const dismiss = useCallback(() => {
-    if (state.kind === "available" && state.info.version) void bridge.updateDismiss?.(state.info.version).catch(() => {});
+    // "Depois" vale também no erro e durante o download (o download segue em segundo plano).
+    const version = state.kind === "available" || state.kind === "installing" ? state.info.version : state.kind === "error" ? state.info?.version : null;
+    if (version) void bridge.updateDismiss?.(version).catch(() => {});
     setState({ kind: "idle" });
   }, [bridge, state]);
   /** Mostra o aviso sem versão nova de verdade (conferir o visual pelo console de depuração). */

@@ -104,9 +104,17 @@ async function resolve(bundle: ThemeBundle): Promise<ActiveTheme> {
   return { id: bundle.id, images, pixelated: manifest.images?.pixelated !== false, fontFamily, colors, glow: manifest.colors?.glow ?? undefined, copy, sounds, hud };
 }
 
-/** Carrega o tema `id`; enquanto carrega (ou se falhar) devolve o tema vazio. */
+/** Carrega o tema `id`; enquanto carrega (ou se falhar) devolve o tema vazio. Reimportar
+ *  ou remover um tema (em qualquer janela) chega como "theme:changed" e recarrega. */
 export function useTheme(bridge: ShellBridge, id: string | undefined) {
   const [theme, setTheme] = useState<ActiveTheme>(emptyTheme);
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    if (!bridge.onDesktopEvent) return;
+    let stop: (() => void) | undefined, alive = true;
+    void bridge.onDesktopEvent("theme:changed", payload => { forgetTheme(String(payload)); setVersion(value => value + 1); }).then(fn => { if (alive) stop = fn; else fn(); });
+    return () => { alive = false; stop?.(); };
+  }, [bridge]);
   useEffect(() => {
     if (!id || id === "eyes" || !bridge.themeRead) { setTheme(emptyTheme); return; }
     let active = true;
@@ -115,10 +123,12 @@ export function useTheme(bridge: ShellBridge, id: string | undefined) {
       pending = bridge.themeRead(id).then(resolve);
       cache.set(id, pending);
       pending.catch(() => cache.delete(id));
-    }
+    } else { cache.delete(id); cache.set(id, pending); }
+    // Guarda só os 2 temas mais recentes (imagens, fonte e sons ocupam memória).
+    while (cache.size > 2) { const oldest = cache.keys().next().value as string; forgetTheme(oldest); }
     pending.then(next => { if (active) setTheme(next); }).catch(() => { if (active) setTheme(emptyTheme); });
     return () => { active = false; };
-  }, [bridge, id]);
+  }, [bridge, id, version]);
   return theme;
 }
 
@@ -128,5 +138,10 @@ export function themeWater<T extends { title: string }>(copy: T, level: number, 
   return line ? { ...copy, title: line } : copy;
 }
 
-/** Tema importado de novo (mesmo id): esquece o que estava em memória. */
-export function forgetTheme(id: string) { cache.delete(id); }
+/** Tema importado de novo ou removido: esquece o que estava em memória, inclusive a fonte. */
+export function forgetTheme(id: string) {
+  cache.delete(id);
+  const name = `heydesk-theme-${id}`, face = fonts.get(name);
+  if (face && typeof document !== "undefined") document.fonts.delete(face);
+  fonts.delete(name);
+}

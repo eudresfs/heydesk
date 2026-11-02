@@ -2,14 +2,17 @@
 // (a cada 2–5 min, sorteado), por ~3 s. Fora dessas janelas não lê nada.
 import { useEffect, useRef, useState } from "react";
 import type { MascotLook, MascotPhase, NotchInteractionSnapshot } from "./useMascotPresence";
+import { lookSource, type LookSource } from "./useMascotTouch";
 
 interface GazeBridge { desktop: boolean; getNotchInteraction?(): Promise<NotchInteractionSnapshot> }
 const WAKE_MS = 4000, PEEK_MS = 3000, STEP_MS = 120;
 const nextPeek = () => (2 + Math.random() * 3) * 60_000;
 const bound = (look: MascotLook) => ({ x: Math.max(-3.5, Math.min(3.5, look.x)), y: Math.max(-1, Math.min(2, look.y)) });
 
-export function useMascotGaze(bridge: GazeBridge, phase: MascotPhase, enabled: boolean): MascotLook | null {
-  const [look, setLook] = useState<MascotLook | null>(null);
+// Cada amostra (a cada 120 ms) vai direto para o mascote; o React só rerenderiza ao abrir e fechar a janela.
+export function useMascotGaze(bridge: GazeBridge, phase: MascotPhase, enabled: boolean): LookSource | null {
+  const [source] = useState(lookSource);
+  const [following, setFollowing] = useState(false);
   const [until, setUntil] = useState(0);
   const previous = useRef(phase);
   // Acordou: estava dormindo/cochilando e voltou.
@@ -25,16 +28,23 @@ export function useMascotGaze(bridge: GazeBridge, phase: MascotPhase, enabled: b
   }, [enabled, phase, until]);
   // Durante a janela, acompanha o cursor; ao fim, volta ao olhar normal.
   useEffect(() => {
-    if (!enabled || !bridge.getNotchInteraction || until <= Date.now()) { setLook(null); return; }
+    if (!enabled || !bridge.getNotchInteraction || until <= Date.now()) { setFollowing(false); return; }
     let active = true, timer = 0;
     const step = async () => {
       if (!active) return;
-      if (Date.now() >= until) { setLook(null); return; }
-      try { const value = await bridge.getNotchInteraction!(); if (active && value.look) setLook(bound(value.look)); } catch { /* sem leitura, sem olhar */ }
+      if (Date.now() >= until) { setFollowing(false); return; }
+      try {
+        const value = await bridge.getNotchInteraction!();
+        if (active && value.look) {
+          const next = bound(value.look), current = source.get();
+          if (Math.abs(current.x - next.x) >= .15 || Math.abs(current.y - next.y) >= .15) source.set(next);
+          setFollowing(true);
+        }
+      } catch { /* sem leitura, sem olhar */ }
       if (active) timer = window.setTimeout(() => void step(), STEP_MS);
     };
     void step();
     return () => { active = false; window.clearTimeout(timer); };
-  }, [bridge, enabled, until]);
-  return look;
+  }, [bridge, enabled, until, source]);
+  return following ? source : null;
 }

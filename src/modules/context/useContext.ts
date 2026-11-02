@@ -32,7 +32,8 @@ function useSnapshot<T>(read: () => Promise<T>, enabled: boolean, interval: numb
         try { result = await task; }
         finally { if (pending.current === task) pending.current = null; }
         if (active) {
-          const text = JSON.stringify(result);
+          // observedAt muda a cada leitura: compara sem ele (senão o app inteiro redesenha a cada segundo).
+          const text = JSON.stringify(result, (key, value) => key === "observedAt" ? undefined : value);
           if (text !== last.current) { last.current = text; setValue(result); }
           setFailed(false);
         }

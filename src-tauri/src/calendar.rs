@@ -282,7 +282,7 @@ fn run(shared: Arc<(Mutex<State>, Condvar)>) {
         for feed in &config.feeds {
             let text = client.as_ref().ok_or_else(|| "sem rede".to_string())
                 .and_then(|client| client.get(&feed.url).send().map_err(|_| "sem resposta".to_string()))
-                .and_then(|response| if response.status().is_success() { response.text().map_err(|_| "resposta inválida".to_string()) } else { Err(format!("HTTP {}", response.status().as_u16())) });
+                .and_then(|response| if response.status().is_success() { crate::sports::read_limited(response).map_err(|_| "resposta inválida".to_string()) } else { Err(format!("HTTP {}", response.status().as_u16())) });
             match text {
                 Ok(text) if text.contains("BEGIN:VCALENDAR") => events.extend(parse_ics(&text, feed, from, to)),
                 Ok(_) if host(&feed.url) == "calendar.google.com" => errors.push(format!("{}: use o Endereço secreto no formato iCal (Configurações da agenda › Integrar agenda)", feed.name)),

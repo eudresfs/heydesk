@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "identifier": "main",
   "description": "Permissões mínimas da janela principal do Heydesk",
-  "windows": ["main", "settings", "pip"],
+  "windows": ["main", "settings"],
   "permissions": [
     "allow-load-settings",
     "allow-save-settings",

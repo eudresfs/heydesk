@@ -55,7 +55,7 @@ test("movimento imediato cancela RAF e conclui sem aguardar relógio", async () 
 });
 
 test("corpo usa snap conjunto em pixels depois do frame, não o limiar do helper genérico", () => {
-  const oneAxisMoving = { width: { x: 580.001, velocity: .01 }, height: { x: 200, velocity: 2 } };
+  const oneAxisMoving = { width: { x: 580.001, velocity: .01 }, height: { x: 200, velocity: 8 } };
   const advanced = advanceBodySpring(oneAxisMoving, true, .004);
   assert.notEqual(advanced.width.x, 580, "largura não deve fixar enquanto altura ainda se move");
   const near = advanceBodySpring({ width: { x: 580.1, velocity: .4 }, height: { x: 200.1, velocity: .4 } }, true, .004);
@@ -84,11 +84,11 @@ test("corpo retém frame e timestamp ao reverter e só termina no repouso real",
 });
 
 test("corpo ao encolher pousa no compacto e no peek sem ficar menor que o conteúdo", () => {
-  for (const [from, to, min] of [[{ width: 580, height: 200 }, false, { width: 220, height: 32 }], [{ width: 580, height: 200 }, "peek", { width: 232, height: 36 }]] as const) {
+  for (const [from, to, min, collapsing] of [[{ width: 580, height: 200 }, false, { width: 220, height: 32 }, false], [{ width: 580, height: 200 }, "peek", { width: 232, height: 36 }, false], [{ width: 580, height: 200 }, false, { width: 220, height: 32 }, true]] as const) {
     let state = { width: { x: from.width, velocity: 0 }, height: { x: from.height, velocity: 0 } };
     let lowest = { width: Infinity, height: Infinity };
     for (let frame = 0; frame < 120; frame++) {
-      state = advanceBodySpring(state, to, 1 / 60);
+      state = advanceBodySpring(state, to, 1 / 60, collapsing);
       lowest = { width: Math.min(lowest.width, state.width.x), height: Math.min(lowest.height, state.height.x) };
     }
     assert.equal(lowest.width, min.width);

@@ -30,7 +30,8 @@ pub struct Item { pub id: String, pub name: String, pub size: u64, pub added_at:
 pub struct ReceiveInfo { pub url: String, pub qr_size: usize, pub qr: String, pub expires_at: i64 }
 
 struct Session { info: ReceiveInfo, stop: Arc<AtomicBool> }
-struct Inner { items: Vec<Item>, session: Option<Session> }
+/// `received`: itens que chegaram do celular nesta sessão — só eles aparecem para o celular.
+struct Inner { items: Vec<Item>, session: Option<Session>, received: Vec<String> }
 pub struct Shelf { inner: Arc<Mutex<Inner>>, dir: PathBuf, thumbs: Mutex<std::collections::HashMap<String, Option<String>>> }
 
 fn now_ms() -> i64 { chrono::Utc::now().timestamp_millis() }
@@ -86,7 +87,7 @@ impl Shelf {
         let items: Vec<Item> = std::fs::read(dir.join("shelf.json")).ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
         // Só lista o que ainda existe no disco.
         let items = items.into_iter().filter(|item| dir.join("files").join(&item.id).join(&item.name).is_file()).collect();
-        Self { inner: Arc::new(Mutex::new(Inner { items, session: None })), dir, thumbs: Mutex::new(Default::default()) }
+        Self { inner: Arc::new(Mutex::new(Inner { items, session: None, received: Vec::new() })), dir, thumbs: Mutex::new(Default::default()) }
     }
     pub fn items(&self) -> Vec<Item> { self.inner.lock().map(|inner| inner.items.clone()).unwrap_or_default() }
     pub fn path_of(&self, id: &str) -> Option<PathBuf> {
@@ -106,6 +107,8 @@ impl Shelf {
         let name = path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
         let mut file = std::fs::File::open(path).map_err(|error| error.to_string())?;
         let item = store(&self.dir, &name, &mut file, meta.len()).map_err(|error| error.to_string())?;
+        // Mantém a marca "veio da internet" do original (SmartScreen, Office em modo protegido).
+        mark_from_internet(&self.dir.join("files").join(&item.id).join(&item.name), Some(path));
         insert(&self.inner, &self.dir, app, item)
     }
     /// Miniatura do Windows (foto, vídeo, PDF ou ícone do tipo) como data URL.
@@ -153,6 +156,7 @@ impl Shelf {
         let stop = Arc::new(AtomicBool::new(false));
         let touched = Arc::new(Mutex::new(Instant::now()));
         inner.session = Some(Session { info: info.clone(), stop: stop.clone() });
+        inner.received.clear();
         drop(inner);
         let (shared, dir) = (self.inner.clone(), self.dir.clone());
         thread::Builder::new().name("heydesk-shelf".into()).spawn(move || serve(listener, token, stop, touched, shared, dir, app)).map_err(|error| error.to_string())?;
@@ -283,12 +287,13 @@ fn handle(mut stream: TcpStream, token: &str, touched: &Mutex<Instant>, shared: 
         return respond(&mut stream, "200 OK", "text/html; charset=utf-8", PAGE.as_bytes());
     }
     if method == "GET" && path == format!("/{token}/list") {
-        let items = shared.lock().map(|inner| inner.items.clone()).unwrap_or_default();
+        // O celular vê só o que ele mesmo mandou nesta sessão, não a prateleira inteira do PC.
+        let items: Vec<Item> = shared.lock().map(|inner| inner.items.iter().filter(|item| inner.received.contains(&item.id)).cloned().collect()).unwrap_or_default();
         let body = serde_json::to_vec(&items).unwrap_or_default();
         return respond(&mut stream, "200 OK", "application/json", &body);
     }
     if let Some(id) = path.strip_prefix(&format!("/{token}/f/")).filter(|_| method == "GET") {
-        let found = shared.lock().ok().and_then(|inner| inner.items.iter().find(|item| item.id == id).cloned());
+        let found = shared.lock().ok().and_then(|inner| inner.items.iter().find(|item| item.id == id && inner.received.iter().any(|received| received == id)).cloned());
         let Some(item) = found else { return respond(&mut stream, "404 Not Found", "text/plain", b"") };
         let mut file = std::fs::File::open(dir.join("files").join(&item.id).join(&item.name))?;
         let length = file.metadata()?.len();
@@ -314,7 +319,10 @@ fn handle(mut stream: TcpStream, token: &str, touched: &Mutex<Instant>, shared: 
     }
     let stored = store(dir, &name, &mut Body { first: std::io::Cursor::new(first), stream: &mut stream, touched }, length);
     let Ok(item) = stored else { let _ = respond(&mut stream, "400 Bad Request", "text/plain", b""); return Ok(()) };
+    mark_from_internet(&dir.join("files").join(&item.id).join(&item.name), None);
+    let id = item.id.clone();
     if insert(shared, dir, app, item).is_err() { return respond(&mut stream, "500 Internal Server Error", "text/plain", b""); }
+    if let Ok(mut inner) = shared.lock() { inner.received.push(id); inner.received.truncate(200); }
     respond(&mut stream, "200 OK", "application/json", b"{\"ok\":true}")
 }
 
@@ -382,4 +390,20 @@ mod tests {
         assert_eq!(modules.len(), size * size);
         assert!(size >= 21);
     }
+}
+
+/// Marca de origem do Windows (Mark-of-the-Web, fluxo `Zone.Identifier`). Com `original`,
+/// copia a marca do arquivo de origem se ele tiver; sem, marca como vindo da rede (zona 3).
+fn mark_from_internet(path: &Path, original: Option<&Path>) {
+    #[cfg(windows)]
+    {
+        let stream = |file: &Path| { let mut name = file.as_os_str().to_owned(); name.push(":Zone.Identifier"); PathBuf::from(name) };
+        let content = match original {
+            Some(source) => match std::fs::read(stream(source)) { Ok(bytes) => bytes, Err(_) => return },
+            None => b"[ZoneTransfer]\r\nZoneId=3\r\n".to_vec(),
+        };
+        let _ = std::fs::write(stream(path), content);
+    }
+    #[cfg(not(windows))]
+    { let _ = (path, original); }
 }

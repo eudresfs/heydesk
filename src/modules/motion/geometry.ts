@@ -3,10 +3,11 @@ export interface NotchGeometry { center: number; width: number; height: number; 
 
 // Raio e asas acompanham a altura: compacto → raio 15/asa 10; aberto → raio 42/asa 22.
 // Contínuo durante a mola, inclusive no overshoot.
-export function notchGeometry(center: number, width: number, height: number): NotchGeometry {
+// `room`: meia largura da janela; a asa encolhe para não ser cortada na borda (Início a 640 px).
+export function notchGeometry(center: number, width: number, height: number, room = Infinity): NotchGeometry {
   // Acima do painel padrão (Ask expandido) raio e asa param de crescer.
   const progress = Math.min(1.1, (height - compactBody.height) / (openBody.height - compactBody.height));
-  return { center, width, height, radius: Math.max(0, Math.min(height / 2, 15 + 27 * progress)), wing: Math.max(0, 10 + 12 * progress) };
+  return { center, width, height, radius: Math.max(0, Math.min(height / 2, 15 + 27 * progress)), wing: Math.max(0, Math.min(10 + 12 * progress, room - width / 2)) };
 }
 
 // Forma e hit-test compartilham medidas. A margem é somente histerese de saída.

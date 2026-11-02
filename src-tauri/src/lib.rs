@@ -80,9 +80,11 @@ fn get_keep_awake(awake: State<'_, awake::KeepAwake>) -> bool { awake.active() }
 #[tauri::command]
 fn load_notes(store: State<'_, notes::NotesStore>) -> Result<notes::Notes, String> { store.load() }
 
+/// Fora da thread principal: a gravação atômica (com fsync) não pode travar o notch.
 #[tauri::command]
-fn save_notes(app: tauri::AppHandle, notes: notes::Notes, store: State<'_, notes::NotesStore>) -> Result<notes::Notes, String> {
-    let saved = store.save(notes)?;
+async fn save_notes(app: tauri::AppHandle, notes: notes::Notes) -> Result<notes::Notes, String> {
+    let handle = app.clone();
+    let saved = tauri::async_runtime::spawn_blocking(move || handle.state::<notes::NotesStore>().save(notes)).await.map_err(|error| error.to_string())??;
     // Notch e janela de configurações (ajustes da água) leem o mesmo arquivo.
     let _ = app.emit("notes:changed", &saved);
     Ok(saved)
@@ -238,7 +240,9 @@ async fn recorder_control(app: tauri::AppHandle, action: String) -> Result<recor
 #[tauri::command]
 fn recorder_open(path: String, reveal: bool) -> Result<(), String> {
     let videos = std::env::var_os("USERPROFILE").map(|home| std::path::PathBuf::from(home).join("Videos").join("Heydesk")).ok_or("Pasta não encontrada.")?;
-    let path = std::path::PathBuf::from(path);
+    // Caminho resolvido (sem "..") e de fato dentro de Vídeos\Heydesk.
+    let path = std::path::PathBuf::from(path).canonicalize().map_err(|_| "Arquivo não encontrado.".to_string())?;
+    let videos = videos.canonicalize().map_err(|_| "Pasta não encontrada.".to_string())?;
     if !path.starts_with(&videos) || !path.is_file() { return Err("Arquivo não encontrado.".into()); }
     let mut command = std::process::Command::new("explorer");
     #[cfg(windows)]

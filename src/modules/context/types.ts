@@ -81,11 +81,15 @@ export interface Prompter { text: string; speed: number; size: number; mirror: b
 export interface Notes { note: string; todos: Todo[]; water?: Water; events?: CalendarEvent[]; prompter?: Prompter; pet?: Pet }
 export interface PetStreak { current: number; best: number; lastDate: string }
 export interface PetGear { hat: string; color: string; scene: string }
-export interface PetDaily { date: string; drinks: number; goalMet: boolean; minigameCoins: number; pets: number; focusXp: number; breaks: number; credited: string[] }
+export interface PetDaily {
+  date: string; drinks: number; goalMet: boolean; minigameCoins: number; minigameXp: number; games: number; pets: number;
+  focusXp: number; focusCoins: number; breaks: number; refusals: number; tasks: number; snack: boolean; credited: string[];
+}
 /** Bichinho: barras de 0 a 100 gravadas em `updatedAt`; a queda com o tempo é calculada na hora. */
 export interface Pet {
   name: string; thirst: number; energy: number; joy: number; focus: number; updatedAt: number;
   xp: number; coins: number; streak: PetStreak; owned: string[]; equipped: PetGear; daily: PetDaily; lastBreakAt: number; lastPetAt: number;
+  lastDrinkAt: number; lastRefuseAt: number;
 }
 export interface LyricLine { atMs: number; text: string }
 export interface Lyrics { state: "synced" | "plain" | "instrumental" | "none" | "error"; lines: LyricLine[]; plain: string | null }

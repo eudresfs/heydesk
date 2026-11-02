@@ -69,12 +69,13 @@ async fn install(app: &AppHandle) -> Result<(), String> {
         if *installing { return Ok(()); }
         *installing = true;
     }
-    let (handle, mut done, mut total) = (app.clone(), 0u64, 0u64);
+    let (handle, mut done, mut total, mut last) = (app.clone(), 0u64, 0u64, u64::MAX);
     let result = update.download_and_install(move |chunk, length| {
         done += chunk as u64;
         if let Some(length) = length { total = length; }
         let percent = if total > 0 { (done * 100 / total).min(100) } else { 0 };
-        let _ = handle.emit(PROGRESS_EVENT, percent);
+        // Só quando o número muda: milhares de pedaços não viram milhares de eventos.
+        if percent != last { last = percent; let _ = handle.emit(PROGRESS_EVENT, percent); }
     }, || {}).await;
     if let Ok(mut installing) = updater.installing.lock() { *installing = false; }
     result.map_err(|error| error.to_string())?;

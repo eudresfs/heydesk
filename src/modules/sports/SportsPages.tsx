@@ -75,7 +75,7 @@ function SeriesMaps({ live, rounds }: { live: CsLive; rounds: { home: number; aw
 
 function Scoreboard({ game, onPin, live, note, onWatch }: { game: SportGame; onPin(id: string): void; live?: CsLive | null; note?: string; onWatch?(embed: string): void }) {
   const rounds = csMapScore(game, live);
-  return <div className="scoreboard hd-enter">
+  return <div className="scoreboard">
     <div className="scoreboard-head"><span>{game.leagueName}</span><span className="scoreboard-actions"><PinButton game={game} onToggle={onPin} />{status(game)}</span></div>
     <div className="scoreboard-row">
       <div className="score-team"><Logo src={game.home.logo} size={34} name={game.home.name} /><span className="score-team-name"><strong title={game.home.name}>{game.home.name}</strong>{game.home.short !== game.home.name && <small>{game.home.short}</small>}</span></div>
@@ -99,8 +99,8 @@ function Scoreboard({ game, onPin, live, note, onWatch }: { game: SportGame; onP
   </div>;
 }
 
-function Row({ game, index, onPin }: { game: SportGame; index: number; onPin(id: string): void }) {
-  return <li className="game-row hd-enter" style={{ ["--i" as string]: index }} data-followed={game.followed || undefined}>
+function Row({ game, onPin }: { game: SportGame; onPin(id: string): void }) {
+  return <li className="game-row" data-followed={game.followed || undefined}>
     <span className="game-when">{game.state === "in" ? <span className="live-dot game-live" /> : null}{game.state === "in" ? (game.clock ?? "") : game.state === "post" ? "fim" : kickoffLabel(game.start, Date.now())}</span>
     <span className="game-teams"><Logo src={game.home.logo} size={14} name={game.home.name} />{game.home.short}
       <em>{game.state === "pre" ? "×" : `${game.home.score ?? 0}–${game.away.score ?? 0}`}</em>
@@ -113,7 +113,7 @@ function Row({ game, index, onPin }: { game: SportGame; index: number; onPin(id:
 export function SportsPage({ sports, onConfigure }: { sports?: SportsControl; onConfigure(): void }) {
   if (!sports?.available) return <div className="statement-page"><p className="context-note">Esportes aparecem no app desktop.</p></div>;
   const games = sports.snapshot?.games ?? [];
-  if (!sports.config?.leagues.length) return <div className="statement-page sports-empty hd-enter">
+  if (!sports.config?.leagues.length) return <div className="statement-page sports-empty">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 7l4 3-1.5 4.5h-5L8 10zM12 3v4M21 10l-5 0M3 10h5M7 20l2-5.5M17 20l-2-5.5" /></svg>
     <p className="context-note">Escolha esportes, competições e times para acompanhar. Placar ao vivo e avisos antes do jogo aparecem no notch.</p>
     <button type="button" className="save-button sports-cta" onClick={onConfigure}>Escolher</button>
@@ -126,7 +126,7 @@ export function SportsPage({ sports, onConfigure }: { sports?: SportsControl; on
   const error = sports.snapshot?.errors[0];
   return <div className="sports-page">
     {live && <Scoreboard game={live} onPin={sports.togglePin} onWatch={sports.watch} live={sports.csLive} note={sports.csStatus?.gameId === live.id ? csNote[sports.csStatus.state] : undefined} />}
-    {list.length ? <ul className="game-list">{list.map((game, index) => <Row key={game.id} game={game} index={index} onPin={sports.togglePin} />)}</ul>
+    {list.length ? <ul className="game-list">{list.map(game => <Row key={game.id} game={game} onPin={sports.togglePin} />)}</ul>
       : !live && <p className="context-note">{sports.snapshot ? "Sem jogos hoje nem nos próximos 3 dias." : "Buscando jogos…"}</p>}
     {error && <p className="sports-error" role="status">{error}</p>}
   </div>;
@@ -163,15 +163,15 @@ export function SportsPreferences({ sports, bridge }: { sports?: SportsControl; 
     <div className="seg" role="tablist" aria-label="Esportes">
       {([["leagues", "Competições"], ["teams", "Times"], ["key", "Chave"]] as const).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className="seg-item" onClick={() => setTab(id)}>{label}{id === "teams" && config.teams.length ? <i>{config.teams.length}</i> : null}</button>)}
     </div>
-    {tab === "leagues" && <div className="chip-groups hd-enter">
+    {tab === "leagues" && <div className="chip-groups">
       {/* Modalidade primeiro, competições dela depois: tudo cabe sem rolagem. */}
       <div className="kind-row">{Object.keys(groups).map(name => {
         const count = groups[name].filter(([id]) => chosen.includes(id)).length;
         return <button key={name} type="button" className="kind" aria-pressed={kind === name} onClick={() => setKind(name)}>{name}{count ? <i>{count}</i> : null}</button>;
       })}</div>
-      <div className="chip-group" key={kind}>{(groups[kind] ?? []).map(([id, name]) => <button key={id} type="button" className="chip hd-enter" aria-pressed={chosen.includes(id)} onClick={() => toggleLeague(id)}>{name}</button>)}</div>
+      <div className="chip-group" key={kind}>{(groups[kind] ?? []).map(([id, name]) => <button key={id} type="button" className="chip" aria-pressed={chosen.includes(id)} onClick={() => toggleLeague(id)}>{name}</button>)}</div>
     </div>}
-    {tab === "teams" && <div className="team-picker hd-enter">
+    {tab === "teams" && <div className="team-picker">
       {chosen.length ? <>
         <div className="team-tools">
           <select aria-label="Competição" value={league} onChange={event => setLeague(event.target.value)}>{chosen.map(id => <option key={id} value={id}>{sports.catalog.find(item => item[0] === id)?.[1] ?? id}</option>)}</select>
@@ -184,7 +184,7 @@ export function SportsPreferences({ sports, bridge }: { sports?: SportsControl; 
         </div>
       </> : <p className="context-note">Escolha uma competição primeiro.</p>}
     </div>}
-    {tab === "key" && <div className="key-panel hd-enter">
+    {tab === "key" && <div className="key-panel">
       <p className="key-help">PandaScore (grátis) para CS2, Valorant, LoL e Dota. Crie a conta em pandascore.co e cole a chave. Fica só neste computador.</p>
       <div className="key-row" data-shake={shake || undefined} key={shake}>
         <input className="hd-input key-input" type="password" aria-label="Chave do PandaScore" placeholder={config.hasToken ? "Chave salva · cole outra para trocar" : "Cole a chave"} value={token} onChange={event => setToken(event.target.value.trim())}

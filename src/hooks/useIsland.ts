@@ -41,12 +41,21 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
   const goal = useCallback((phase: IslandPhase): BodyGoal => {
     if (phase === "open") return tall.current ?? true;
     const size = wide.current;
+    // Sem mola o pré-hover seria um salto de 4 px logo antes do salto de abertura.
+    if (phase === "peek" && reduce.current) return size ?? false;
     if (!size) return phase === "peek" ? "peek" : false;
     return phase === "peek" ? { width: Math.max(peekBody.width, size.width + 12), height: peekBody.height } : size;
   }, []);
 
-  const paint = useCallback((width: number, height: number) => {
-    const progress = (height - compactBody.height) / (openBody.height - compactBody.height), shape = notchGeometry(center.current, width, height);
+  const paint = useCallback((springWidth: number, height: number) => {
+    // A janela nativa tem largura fixa: o overshoot (Início, 640 px) e as asas não passam da borda.
+    const width = Math.min(springWidth, center.current * 2), shape = notchGeometry(center.current, width, height, center.current);
+    // Abertura medida contra o alvo real (Início 280, Ask 380), não contra o painel padrão.
+    const full = tall.current ?? openBody;
+    const rest = Math.max(compactBody.height, wide.current?.height ?? compactBody.height);
+    const openness = clamp((height - rest) / Math.max(1, full.height - rest));
+    // HUD (filetes, arte, joias) segue a mesma abertura, quadro a quadro, em vez de uma transição pela classe.
+    const hud = String(Math.round(clamp((openness - .35) / .5) * 100) / 100);
     // Várias camadas seguem a mesma forma (superfície, arte do tema).
     const d = notchPath(shape);
     surface.current?.querySelectorAll("[data-notch-path]").forEach(path => path.setAttribute("d", d));
@@ -58,8 +67,10 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
       box.setAttribute("x", String(left - shape.wing)); box.setAttribute("y", "0");
       box.setAttribute("width", String(shape.width + shape.wing * 2)); box.setAttribute("height", String(Math.max(1, height)));
     });
+    surface.current?.style.setProperty("--hud-p", hud);
     const ornaments = surface.current?.parentElement?.querySelector<HTMLElement>(".hud-ornaments");
     if (ornaments) {
+      ornaments.style.setProperty("--hud-p", hud);
       ornaments.style.setProperty("--notch-left", `${left}px`);
       ornaments.style.setProperty("--notch-width", `${shape.width}px`);
       ornaments.style.setProperty("--notch-height", `${height}px`);
@@ -67,9 +78,10 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
       ornaments.style.setProperty("--notch-wing", `${shape.wing}px`);
     }
     if (panel.current) {
-      panel.current.inert = current.current !== "open" || progress < .9;
-      panel.current.style.opacity = String(clamp((progress - .6) / .3));
-      const full = tall.current ?? openBody;
+      const opening = current.current === "open";
+      panel.current.inert = !opening || openness < .9;
+      // Abrindo, o conteúdo chega antes do fim da mola; fechando, sai primeiro, antes de o notch encolher.
+      panel.current.style.opacity = String(opening ? clamp((openness - .45) / .4) : clamp((openness - .7) / .25));
       panel.current.style.height = `${full.height}px`;
       const side = Math.max(0, (full.width - width) / 2);
       panel.current.style.clipPath = `inset(0 ${side}px ${Math.max(0, full.height - height)}px ${side}px round 0 0 ${shape.radius}px ${shape.radius}px)`;
@@ -78,8 +90,7 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
       // Fora do painel o compacto acompanha a largura do corpo: a atividade abre
       // para os lados levando hora e bateria junto com as bordas.
       const base = wide.current?.width ?? compactBody.width;
-      // Avisos em meio-notch deixam o compacto mais alto; ele só some acima dessa altura.
-      const rest = Math.max(compactBody.height, wide.current?.height ?? compactBody.height);
+      // Avisos em meio-notch deixam o compacto mais alto; ele só some acima dessa altura (`rest`).
       const inner = current.current === "open" ? base : Math.max(compactBody.width, width);
       compact.current.style.width = `${inner}px`; compact.current.style.marginLeft = `${-inner / 2}px`;
       compact.current.style.height = `${rest}px`;
@@ -108,7 +119,7 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
     const height = settled ? goal.height : Math.max(goal.height, published.current.height);
     if (width === published.current.width && height === published.current.height && extra.current === published.current.reach) return;
     published.current = { width, height, reach: extra.current };
-    const { radius, wing } = notchGeometry(0, width, height);
+    const { radius, wing } = notchGeometry(0, width, height, center.current);
     const hit = Math.min(440, height + extra.current);
     if (bridge.desktop) void Promise.resolve().then(() => bridge.setHitShape({ width, height: hit, radius, wing }))
       .catch(() => setError("Não foi possível ajustar a ilha. Tente novamente."));
@@ -118,7 +129,7 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
     const { width, height } = published.current;
     if (!width || reach === published.current.reach) return;
     published.current = { width, height, reach };
-    const { radius, wing } = notchGeometry(0, width, height);
+    const { radius, wing } = notchGeometry(0, width, height, center.current);
     if (bridge.desktop) void Promise.resolve().then(() => bridge.setHitShape({ width, height: Math.min(440, height + reach), radius, wing })).catch(() => {});
   }, [bridge, reach]);
 
@@ -255,5 +266,7 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
   }, [body, bridge, change, markHidden, reveal, setPointer]);
 
   return { phase, expanded: phase === "open", viewportExpanded: panelMounted, peeking: phase === "peek", hovered, hidden, error, focusTarget,
-    change, hide, pointerMove, pointerLeave, resumeAutoCollapse, surfaceRef, panelRef, compactRef };
+    change, hide, pointerMove, pointerLeave, resumeAutoCollapse, surfaceRef, panelRef, compactRef,
+    /** Repinta a forma agora (camadas novas do tema ainda sem `d`). */
+    repaint: measure };
 }

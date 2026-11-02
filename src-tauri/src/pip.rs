@@ -8,6 +8,8 @@ use tauri::{AppHandle, Manager, PhysicalPosition};
 pub const LABEL: &str = "pip";
 const GAP: f64 = 8.0;
 const SNAP: f64 = 90.0;
+/// Duração do deslize atrás da ilha (perto do assentamento da mola do notch).
+const GLIDE: Duration = Duration::from_millis(240);
 
 #[derive(Default)]
 pub struct Pip {
@@ -16,6 +18,16 @@ pub struct Pip {
     moving_until: Mutex<Option<Instant>>,
     /// Último "Moved" vindo do usuário; o ajuste espera o arrasto parar.
     drag_token: AtomicU64,
+    /// Deslize em curso: um pedido novo cancela o anterior (antes duas threads brigavam pela posição).
+    glide: AtomicU64,
+}
+
+/// Ponto do deslize em `t` (0–1, pelo relógio), com ease-out cúbico.
+fn glide_point(from: PhysicalPosition<i32>, to: PhysicalPosition<i32>, t: f64) -> PhysicalPosition<i32> {
+    let ease = 1.0 - (1.0 - t.clamp(0.0, 1.0)).powi(3);
+    let x = from.x as f64 + (to.x - from.x) as f64 * ease;
+    let y = from.y as f64 + (to.y - from.y) as f64 * ease;
+    PhysicalPosition::new(x.round() as i32, y.round() as i32)
 }
 
 /// Onde o PiP grudado fica: centralizado sob a ilha, `GAP` abaixo da borda de baixo.
@@ -40,17 +52,20 @@ impl Pip {
         let (Some(target), Some(pip)) = (dock_target(app), app.get_webview_window(LABEL)) else { return };
         let Ok(from) = pip.outer_position() else { return };
         if from == target { return; }
-        // Desliza ~200 ms (ease-out) para parecer preso à borda da ilha.
-        let steps = 12u32;
-        if let Ok(mut until) = self.moving_until.lock() { *until = Some(Instant::now() + Duration::from_millis(320)); }
+        // Desliza (ease-out) para parecer preso à borda da ilha. Parte de onde está agora (mesmo
+        // no meio de um deslize anterior, que é cancelado) e mede o tempo pelo relógio, não por
+        // passos: sleeps atrasados não esticam a animação.
+        let generation = self.glide.fetch_add(1, Ordering::Relaxed) + 1;
+        if let Ok(mut until) = self.moving_until.lock() { *until = Some(Instant::now() + GLIDE + Duration::from_millis(80)); }
+        let app = app.clone();
         std::thread::spawn(move || {
-            for step in 1..=steps {
-                let t = step as f64 / steps as f64;
-                let ease = 1.0 - (1.0 - t).powi(3);
-                let x = from.x as f64 + (target.x - from.x) as f64 * ease;
-                let y = from.y as f64 + (target.y - from.y) as f64 * ease;
-                let _ = pip.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
-                std::thread::sleep(Duration::from_millis(16));
+            let start = Instant::now();
+            loop {
+                if app.state::<Pip>().glide.load(Ordering::Relaxed) != generation { return; }
+                let t = start.elapsed().as_secs_f64() / GLIDE.as_secs_f64();
+                let _ = pip.set_position(glide_point(from, target, t));
+                if t >= 1.0 { return; }
+                std::thread::sleep(Duration::from_millis(8));
             }
         });
     }
@@ -72,5 +87,20 @@ impl Pip {
             pip.docked.store(distance <= SNAP, Ordering::Relaxed);
             pip.follow(&app);
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deslize_vai_do_inicio_ao_alvo_sem_passar() {
+        let (from, to) = (PhysicalPosition::new(100, 40), PhysicalPosition::new(100, 248));
+        assert_eq!(glide_point(from, to, 0.0), from);
+        assert_eq!(glide_point(from, to, 1.0), to);
+        assert_eq!(glide_point(from, to, 3.0), to, "atraso não ultrapassa o alvo");
+        let middle = glide_point(from, to, 0.5);
+        assert!(middle.y > 40 + 104, "ease-out: mais da metade do caminho na metade do tempo");
     }
 }

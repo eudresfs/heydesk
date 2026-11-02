@@ -10,7 +10,7 @@ const MAX_IMAGE: usize = 2 * 1024 * 1024;
 const MAX_FONT: usize = 4 * 1024 * 1024;
 const MAX_SOUND: usize = 1024 * 1024;
 const MAX_PACK: u64 = 20 * 1024 * 1024;
-const MAX_FILES: usize = 40;
+const MAX_FILES: usize = 80;
 const IMPORT_TTL: Duration = Duration::from_secs(10 * 60);
 const SOUND_KINDS: [&str; 13] = ["notification", "reminder", "goal", "kickoff", "charger", "unplug", "warn", "open", "close", "tap", "giggle", "track", "confirm"];
 
@@ -142,6 +142,15 @@ impl Source {
             }
         }
     }
+    /// Tamanho sem ler o arquivo (pasta do usuário: metadados).
+    fn size(&self, name: &str) -> Result<u64, String> {
+        let name = safe_name(name)?;
+        let missing = || format!("Arquivo {name} não existe no tema.");
+        match self {
+            Source::Embedded(files) => files.iter().find(|(file, _)| *file == name).map(|(_, bytes)| bytes.len() as u64).ok_or_else(missing),
+            Source::Dir(dir) => std::fs::metadata(dir.join(name)).ok().filter(|meta| meta.is_file()).map(|meta| meta.len()).ok_or_else(missing),
+        }
+    }
 }
 
 fn is_hex(value: &str) -> bool { let b = value.as_bytes(); b.len() == 7 && b[0] == b'#' && b[1..].iter().all(u8::is_ascii_hexdigit) }
@@ -149,8 +158,10 @@ fn is_hex(value: &str) -> bool { let b = value.as_bytes(); b.len() == 7 && b[0] 
 /// Tipo MIME pelo conteúdo (a extensão do usuário não é confiável).
 fn sniff(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG") { return Some("image/png"); }
-    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(512)]).to_ascii_lowercase();
-    if head.trim_start().starts_with("<svg") || (head.starts_with("<?xml") && head.contains("<svg")) { return Some("image/svg+xml"); }
+    // SVG: aceita BOM, declaração XML, comentários e DOCTYPE antes de <svg.
+    let head = String::from_utf8_lossy(&bytes[..bytes.len().min(4096)]).to_ascii_lowercase();
+    let head = head.trim_start_matches('\u{feff}').trim_start();
+    if head.starts_with("<svg") || ((head.starts_with("<?xml") || head.starts_with("<!--") || head.starts_with("<!doctype")) && head.contains("<svg")) { return Some("image/svg+xml"); }
     if bytes.starts_with(b"\0\x01\0\0") || bytes.starts_with(b"true") { return Some("font/ttf"); }
     if bytes.starts_with(b"OTTO") { return Some("font/otf"); }
     if bytes.starts_with(b"wOF2") { return Some("font/woff2"); }
@@ -224,6 +235,26 @@ fn validate(manifest: &ThemeManifest, source: &Source) -> Result<Loaded, String>
     Ok(loaded)
 }
 
+/// Conferência sem ler o conteúdo: esquema, nome, arquivos existentes e dentro do limite.
+fn quick_check(manifest: &ThemeManifest, source: &Source) -> Result<(), String> {
+    if manifest.schema != 1 { return Err("Versão do tema não suportada.".into()); }
+    let name_len = manifest.name.trim().chars().count();
+    if name_len == 0 || name_len > 40 { return Err("O nome do tema deve ter de 1 a 40 caracteres.".into()); }
+    let mut files: Vec<(&str, usize)> = Vec::new();
+    if let Some(images) = &manifest.images { files.extend(images.files().into_iter().map(|(_, file)| (file, MAX_IMAGE))); }
+    if let Some(font) = &manifest.font { files.push((font, MAX_FONT)); }
+    files.extend(manifest.sounds.values().map(|file| (file.as_str(), MAX_SOUND)));
+    if let Some(hud) = &manifest.hud { files.extend([&hud.frame, &hud.panel, &hud.texture, &hud.corner, &hud.crest].into_iter().flatten().map(|file| (file.as_str(), MAX_IMAGE))); }
+    let mut total = 0u64;
+    for (file, max) in files {
+        let size = source.size(file)?;
+        if size > max as u64 { return Err(format!("O arquivo {file} passa de {} MB.", max / 1024 / 1024)); }
+        total += size;
+    }
+    if total > MAX_PACK { return Err("O tema passa de 20 MB.".into()); }
+    Ok(())
+}
+
 #[derive(Default)]
 struct Loaded { images: BTreeMap<String, String>, font: Option<ThemeBlob>, sounds: BTreeMap<String, ThemeBlob>, hud: BTreeMap<String, String> }
 
@@ -254,10 +285,18 @@ impl Themes {
         dir.join("theme.json").is_file().then_some((Source::Dir(dir), false))
     }
 
+    /// Resumo leve para a lista: lê só o manifesto e a imagem de prévia; os outros arquivos
+    /// têm existência e tamanho conferidos pelos metadados (a validação completa fica para
+    /// a leitura e a importação). Antes isto lia e codificava o tema inteiro só para a prévia.
     fn summary(&self, id: &str, source: &Source, built_in: bool) -> ThemeSummary {
         let manifest = match read_manifest(source) { Ok(manifest) => manifest, Err(error) => return ThemeSummary { id: id.into(), name: id.into(), built_in, error: Some(error), ..Default::default() } };
+        let error = quick_check(&manifest, source).err();
         // Prévia: o mascote calmo; tema só de HUD mostra o brasão.
-        let (preview, error) = match validate(&manifest, source) { Ok(loaded) => (loaded.images.get("calm").or(loaded.hud.get("crest")).cloned(), None), Err(error) => (None, Some(error)) };
+        let preview_file = manifest.images.as_ref().map(|images| images.calm.clone()).or_else(|| manifest.hud.as_ref().and_then(|hud| hud.crest.clone()));
+        let preview = if error.is_some() { None } else {
+            preview_file.and_then(|file| source.file(&file).ok()).filter(|bytes| bytes.len() <= MAX_IMAGE)
+                .and_then(|bytes| sniff(&bytes).filter(|mime| mime.starts_with("image/")).map(|mime| format!("data:{mime};base64,{}", base64_of(&bytes))))
+        };
         ThemeSummary {
             id: id.into(), name: manifest.name.trim().to_string(), built_in, has_images: manifest.images.is_some(), has_font: manifest.font.is_some(),
             sound_kinds: manifest.sounds.keys().cloned().collect(), glow: manifest.colors.and_then(|colors| colors.glow), preview, error,
@@ -306,9 +345,11 @@ impl Themes {
         let lower = base.to_ascii_lowercase();
         let wanted = lower == "theme.json" || [".png", ".svg", ".ttf", ".otf", ".woff2", ".woff", ".wav", ".ogg", ".mp3"].iter().any(|ext| lower.ends_with(ext));
         if !wanted || safe_name(base).is_err() { return Ok(import.bytes); }
-        let max = if lower == "theme.json" { MAX_MANIFEST } else if lower.ends_with(".png") || lower.ends_with(".svg") { MAX_IMAGE } else if lower.ends_with(".wav") || lower.ends_with(".ogg") || lower.ends_with(".mp3") { MAX_SOUND } else { MAX_FONT };
-        if bytes.len() > max { return Err(format!("{base} passa de {} MB.", max / 1024 / 1024)); }
-        if import.files + 1 > MAX_FILES { return Err("O tema tem arquivos demais (máximo 40).".into()); }
+        // Aqui só um teto geral: o limite de cada tipo vale para os arquivos que o
+        // theme.json usa (conferidos ao concluir). Arquivos sobrando na pasta não barram.
+        let max = if lower == "theme.json" { MAX_MANIFEST } else { MAX_FONT };
+        if bytes.len() > max { return Ok(import.bytes); }
+        if import.files + 1 > MAX_FILES { return Err(format!("A pasta tem arquivos demais para um tema (máximo {MAX_FILES}).")); }
         if import.bytes + bytes.len() as u64 > MAX_PACK { return Err("O tema passa de 20 MB.".into()); }
         let path = import.dir.join(base);
         if path.parent() != Some(import.dir.as_path()) { return Err(format!("Nome de arquivo inválido no tema: {base}")); }
@@ -327,9 +368,17 @@ impl Themes {
             let source = Source::Dir(import.dir.clone());
             let manifest = read_manifest(&source)?;
             validate(&manifest, &source)?;
+            // Troca segura: o tema antigo vira ".old-*" e só sai depois que o novo entrou;
+            // se a troca falhar no meio, o antigo volta para o lugar.
             let target = self.user_dir.join(&id);
-            if target.exists() { std::fs::remove_dir_all(&target).map_err(|error| error.to_string())?; }
-            std::fs::rename(&import.dir, &target).map_err(|error| error.to_string())?;
+            let old = self.user_dir.join(format!(".old-{id}-{}", std::process::id()));
+            let replacing = target.exists();
+            if replacing { std::fs::rename(&target, &old).map_err(|error| error.to_string())?; }
+            if let Err(error) = std::fs::rename(&import.dir, &target) {
+                if replacing { let _ = std::fs::rename(&old, &target); }
+                return Err(error.to_string());
+            }
+            if replacing { let _ = std::fs::remove_dir_all(&old); }
             Ok(id)
         })();
         if result.is_err() { let _ = std::fs::remove_dir_all(&import.dir); }
@@ -357,8 +406,12 @@ impl Themes {
     }
 }
 
+/// Fora da thread principal: ler pastas de temas não pode travar o notch.
 #[tauri::command]
-pub fn theme_list(themes: tauri::State<'_, Themes>) -> Vec<ThemeSummary> { themes.list() }
+pub async fn theme_list(app: tauri::AppHandle) -> Result<Vec<ThemeSummary>, String> {
+    use tauri::Manager;
+    tauri::async_runtime::spawn_blocking(move || app.state::<Themes>().list()).await.map_err(|error| error.to_string())
+}
 
 #[tauri::command]
 pub async fn theme_read(app: tauri::AppHandle, id: String) -> Result<ThemeBundle, String> {
@@ -378,13 +431,24 @@ pub fn theme_import_file(themes: tauri::State<'_, Themes>, request: tauri::ipc::
 }
 
 #[tauri::command]
-pub fn theme_import_commit(themes: tauri::State<'_, Themes>, token: u64, folder: String) -> Result<String, String> { themes.import_commit(token, &folder) }
+pub fn theme_import_commit(app: tauri::AppHandle, themes: tauri::State<'_, Themes>, token: u64, folder: String) -> Result<String, String> {
+    use tauri::Emitter;
+    let id = themes.import_commit(token, &folder)?;
+    // Todas as janelas esquecem a versão antiga (notch e configurações têm caches próprios).
+    let _ = app.emit("theme:changed", &id);
+    Ok(id)
+}
 
 #[tauri::command]
 pub fn theme_import_cancel(themes: tauri::State<'_, Themes>, token: u64) { themes.import_cancel(token) }
 
 #[tauri::command]
-pub fn theme_remove(themes: tauri::State<'_, Themes>, id: String) -> Result<(), String> { themes.remove(&id) }
+pub fn theme_remove(app: tauri::AppHandle, themes: tauri::State<'_, Themes>, id: String) -> Result<(), String> {
+    use tauri::Emitter;
+    themes.remove(&id)?;
+    let _ = app.emit("theme:changed", &id);
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {
@@ -507,14 +571,30 @@ mod tests {
     }
 
     #[test]
-    fn import_rejects_oversized_files() {
+    fn import_rejects_oversized_files_only_when_used() {
         let test = TestDir::new("big");
         let themes = Themes::new(test.0.clone());
+        // Arquivo grande que o tema não usa: ignorado, a importação segue.
         let token = themes.import_begin().unwrap();
-        let big = vec![0u8; MAX_SOUND + 1];
-        assert!(themes.import_file(token, "goal.wav", &big).unwrap_err().contains("passa de 1 MB"));
-        themes.import_cancel(token);
-        assert!(std::fs::read_dir(&test.0).map(|d| d.count()).unwrap_or(0) == 0);
+        themes.import_file(token, "theme.json", manifest("").as_bytes()).unwrap();
+        themes.import_file(token, "a.png", PNG).unwrap();
+        let mut sobra = b"RIFF".to_vec(); sobra.resize(MAX_SOUND + 10, 0);
+        themes.import_file(token, "sobra.wav", &sobra).unwrap();
+        assert_eq!(themes.import_commit(token, "ok").unwrap(), "ok");
+        // Som grande que o tema usa: barrado ao concluir, sem deixar nada.
+        let token = themes.import_begin().unwrap();
+        themes.import_file(token, "theme.json", manifest(r#","sounds":{"goal":"goal.wav"}"#).as_bytes()).unwrap();
+        themes.import_file(token, "a.png", PNG).unwrap();
+        themes.import_file(token, "goal.wav", &sobra).unwrap();
+        assert!(themes.import_commit(token, "grande").unwrap_err().contains("passa de 1 MB"));
+        assert!(!test.0.join("grande").exists());
+    }
+
+    #[test]
+    fn svg_sniff_accepts_bom_comments_and_doctype() {
+        assert_eq!(sniff("\u{feff}<svg xmlns=\"x\"/>".as_bytes()), Some("image/svg+xml"));
+        assert_eq!(sniff(b"<!-- arte --><svg/>"), Some("image/svg+xml"));
+        assert_eq!(sniff(b"<?xml version=\"1.0\"?>\n<!DOCTYPE svg PUBLIC \"x\" \"y\">\n<svg/>"), Some("image/svg+xml"));
     }
 
     #[test]

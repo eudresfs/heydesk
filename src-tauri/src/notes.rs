@@ -75,12 +75,13 @@ pub struct Pet {
     pub updated_at: i64,
     pub xp: u32, pub coins: u32,
     pub streak: PetStreak, pub owned: Vec<String>, pub equipped: PetGear, pub daily: PetDaily,
-    pub last_break_at: i64, pub last_pet_at: i64,
+    pub last_break_at: i64, pub last_pet_at: i64, pub last_drink_at: i64, pub last_refuse_at: i64,
 }
 impl Default for Pet {
     fn default() -> Self {
         Self { name: "Nusa".into(), thirst: 70.0, energy: 80.0, joy: 70.0, focus: 60.0, updated_at: 0, xp: 0, coins: 20,
-            streak: PetStreak::default(), owned: Vec::new(), equipped: PetGear::default(), daily: PetDaily::default(), last_break_at: 0, last_pet_at: 0 }
+            streak: PetStreak::default(), owned: Vec::new(), equipped: PetGear::default(), daily: PetDaily::default(),
+            last_break_at: 0, last_pet_at: 0, last_drink_at: 0, last_refuse_at: 0 }
     }
 }
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -92,7 +93,10 @@ pub struct PetGear { pub hat: String, pub color: String, pub scene: String }
 /// Contadores do dia (limites diários de moedas e experiência).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct PetDaily { pub date: String, pub drinks: u8, pub goal_met: bool, pub minigame_coins: u16, pub pets: u8, pub focus_xp: u16, pub breaks: u8, pub credited: Vec<String> }
+pub struct PetDaily {
+    pub date: String, pub drinks: u8, pub goal_met: bool, pub minigame_coins: u16, pub minigame_xp: u16, pub games: u8, pub pets: u8,
+    pub focus_xp: u16, pub focus_coins: u16, pub breaks: u8, pub refusals: u8, pub tasks: u8, pub snack: bool, pub credited: Vec<String>,
+}
 
 impl Pet {
     fn validate(&self) -> Result<(), String> {

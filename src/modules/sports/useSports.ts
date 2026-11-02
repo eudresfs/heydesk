@@ -168,7 +168,9 @@ export function scoreLabel(league: string, team: string, mapFor?: string) {
 export function sportsResults(previous: SportsSnapshot | null, next: SportsSnapshot | null, followedTeams: string[]): { id: string; result: "win" | "loss" }[] {
   if (!previous || !next) return [];
   const results: { id: string; result: "win" | "loss" }[] = [];
-  for (const game of next.games) {
+  // HLTV não mostra partida encerrada: a que estava ao vivo e sumiu acabou com o último placar visto.
+  const vanished = previous.games.filter(game => game.league.startsWith("hltv:") && game.state === "in" && !next.games.some(item => item.id === game.id)).map(game => ({ ...game, state: "post" }));
+  for (const game of [...next.games, ...vanished]) {
     const before = previous.games.find(item => item.id === game.id);
     if (!game.followed || before?.state !== "in" || game.state !== "post") continue;
     const home = Number(game.home.score ?? 0), away = Number(game.away.score ?? 0);

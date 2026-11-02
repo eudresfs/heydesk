@@ -27,9 +27,10 @@ export function usePageMotion<T extends string>(initial: T, reducedMotion: boole
     // Paginação vertical: as duas páginas andam juntas a altura inteira do viewport,
     // que recorta. Com deslocamento curto elas se sobrepunham no mesmo lugar (medido
     // na janela real: textos das duas páginas misturados por ~50 ms).
-    const timing = { duration: 280, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'forwards' as const };
-    const enter = incoming.animate([{ opacity: .4, filter: 'blur(3px)', transform: `translateY(${direction * 100}%)` }, { opacity: 1, filter: 'blur(0)', transform: 'translateY(0)' }], timing);
-    const leave = outgoing.animate([{ opacity: 1, filter: 'blur(0)', transform: 'translateY(0)' }, { opacity: .4, filter: 'blur(3px)', transform: `translateY(${-direction * 100}%)` }], timing);
+    // Navegação frequente: curta e sem blur (o desfoque de página inteira custava pintura a cada quadro).
+    const timing = { duration: 220, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'forwards' as const };
+    const enter = incoming.animate([{ opacity: .4, transform: `translateY(${direction * 100}%)` }, { opacity: 1, transform: 'translateY(0)' }], timing);
+    const leave = outgoing.animate([{ opacity: 1, transform: 'translateY(0)' }, { opacity: .4, transform: `translateY(${-direction * 100}%)` }], timing);
     running.current = [enter, leave];
     // A camada que sai é desmontada com o fill ainda aplicado; cancelar antes a
     // devolvia ao lugar por um quadro (piscada medida na janela real).

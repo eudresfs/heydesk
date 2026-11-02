@@ -5,7 +5,8 @@ import type { MascotExpression } from "../context/Mascot";
 import type { NotesControl } from "../context/useNotes";
 import type { MascotReaction } from "../context/useMascotTouch";
 import type { SoundKind } from "../sound/sounds";
-import { dayKey, levelFloor, levelOf, petMood, project, stageOf, windowOf, type PetEvent, type PetGain } from "./petSim";
+import { dayKey, levelFloor, levelOf, periodAt, petMood, project, stageOf, windowOf, type PetEvent, type PetGain } from "./petSim";
+export type { PetGain };
 
 export function usePet(notes: NotesControl, { enabled, now, react, play }: {
   enabled: boolean; now: number;
@@ -25,21 +26,30 @@ export function usePet(notes: NotesControl, { enabled, now, react, play }: {
     savedDay.current = today;
     notes.setPet(project(notes.pet, windowOf(notes.water), Date.now()));
   }, [enabled, notes.state, today]); // eslint-disable-line react-hooks/exhaustive-deps
-  const event = useCallback((input: PetEvent) => {
-    if (!enabled || notes.state === "loading") return null;
-    const gain = notes.petEvent(input);
+  // Só com as notas lidas (com erro de leitura, gravar apagaria nota, tarefas e água).
+  const ready = notes.state === "ready" || notes.state === "saving";
+  const celebrate = useCallback((gain: PetGain) => {
     if (gain.xp || gain.coins || gain.capped) setLastGain({ gain, key: Date.now() });
-    if (gain.levelUp) { play("goal"); react("laugh", "giggle", 1400); }
+    // Reação sem "giggle": o efeito que transforma giggle em carinho não deve contar isto.
+    if (gain.levelUp) { play("goal"); react("laugh", null, 1400); }
+  }, [play, react]);
+  const event = useCallback((input: PetEvent) => {
+    if (!enabled || !ready) return null;
+    const gain = notes.petEvent(input);
+    celebrate(gain);
     return gain;
-  }, [enabled, notes, play, react]);
+  }, [enabled, ready, notes, celebrate]);
   return {
     enabled, view, mood, level, stage: stageOf(level),
+    /** Dentro do horário de trabalho (o rosto de "crítico" só aparece nele). */
+    working: periodAt(now, window) === "work",
     /** Progresso até o próximo nível (0–1). */
     progress: Math.min(1, (view.xp - levelFloor(level)) / Math.max(1, levelFloor(level + 1) - levelFloor(level))),
     lastGain, event,
-    /** Alimentar = registrar um gole (a água já credita o bichinho). */
-    feed: () => { if (!enabled) return; notes.drink(); react("happy", "giggle", 900); setLastGain({ gain: { xp: 5, coins: 2, levelUp: false }, key: Date.now() }); },
-    pet: () => { react("happy", "giggle", 1100); event({ kind: "petting" }); },
+    /** "Bebi um copo": registra um gole de verdade na água; o ganho mostrado é o real. */
+    feed: () => { if (!enabled || !ready) return; const gain = notes.drink(); react("happy", null, 900); celebrate(gain); },
+    /** O carinho em si vem do efeito que observa a reação "giggle" (o mesmo do toque no mascote). */
+    pet: () => { react("happy", "giggle", 1100); },
   };
 }
 export type PetControl = ReturnType<typeof usePet>;

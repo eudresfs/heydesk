@@ -42,7 +42,7 @@ function Preview({ settings, label, theme }: { settings: Settings; label: string
   const hud = theme.hud;
   const border = hud?.border;
   const hudVars = hud ? {
-    ["--preview-fill" as string]: hud.surface, ["--preview-texture" as string]: hud.texture ? `url("${hud.texture}")` : undefined, ["--preview-texture-opacity" as string]: hud.texture ? hud.textureOpacity : 0,
+    ["--preview-fill" as string]: hud.surface ? `color-mix(in srgb, ${hud.surface} ${settings.draft.appearance.opacity}%, transparent)` : undefined, ["--preview-texture" as string]: hud.texture ? `url("${hud.texture}")` : undefined, ["--preview-texture-opacity" as string]: hud.texture ? hud.textureOpacity : 0,
     ["--preview-edge" as string]: border ? `inset 1.5px 0 0 ${border}, inset -1.5px 0 0 ${border}, inset 0 -1.5px 0 ${border}` : undefined,
   } : {};
   return <div className="set-preview" aria-label={label} role="img" style={{ ["--preview-opacity" as string]: settings.draft.appearance.opacity / 100, ["--glow-a" as string]: glow[0], ["--glow-b" as string]: glow[1], ["--glow-c" as string]: glow[2], ["--accent" as string]: hud?.accent ?? settings.draft.appearance.accentColor, ...hudVars }}>
@@ -75,10 +75,14 @@ function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: st
   };
   const remove = async (id: string) => {
     setConfirm(null);
-    try { await bridge.themeRemove?.(id); forgetTheme(id); if (value === id) onPick("eyes"); refresh(); }
+    try {
+      await bridge.themeRemove?.(id); forgetTheme(id); refresh();
+      if (value === id) { onPick("eyes"); setStatus({ note: "Tema removido. Salve para voltar aos olhos padrão." }); }
+    }
     catch (reason) { setStatus({ error: typeof reason === "string" ? reason : "Não foi possível remover o tema." }); }
   };
   const user = themes.find(theme => theme.id === value && !theme.builtIn);
+  const broken = themes.filter(theme => theme.error);
   return <Group title="Tema">
     <Row title="Mascote do tema" desc="Os olhos padrão, um dos mascotes do Heydesk ou um pacote que você importou." wide>
       <span className="set-options">{themes.map(theme => <button key={theme.id} type="button" className="set-option set-theme" aria-pressed={value === theme.id} disabled={Boolean(theme.error)} title={theme.error ?? theme.name} onClick={() => onPick(theme.id)}
@@ -87,11 +91,13 @@ function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: st
           : <Mascot size="large" expression="normal" active={false} reducedMotion image={theme.preview ?? undefined} />}
         <span>{theme.name}</span>
       </button>)}</span>
+      {broken.length > 0 && <span className="set-desc set-theme-errors" role="status">{broken.map(theme => <span key={theme.id}><b>{theme.name}</b>: {theme.error}</span>)}</span>}
     </Row>
     <Row title="Importar tema" desc={status.error ? <span role="alert">{status.error}</span> : status.note ?? <>Escolha uma pasta com <code>theme.json</code> e as imagens do mascote (PNG ou SVG). Pastas em <code>%APPDATA%\dev.heydesk.app\themes</code> também aparecem.</>}>
       <span className="set-actions">
-        <label className="set-button" aria-disabled={status.busy || undefined}>{status.busy ? "Importando…" : "Importar pasta"}
-          <input type="file" hidden multiple disabled={status.busy} {...{ webkitdirectory: "" }} onChange={event => { void importFolder(event.target.files); event.target.value = ""; }} /></label>
+        {/* Input visualmente escondido mas focável: Tab chega nele e Enter/Espaço abre o seletor. */}
+        <label className="set-button set-file" aria-disabled={status.busy || undefined}>{status.busy ? "Importando…" : "Importar pasta"}
+          <input type="file" className="sr-only" multiple disabled={status.busy} aria-label="Importar pasta de tema" {...{ webkitdirectory: "" }} onChange={event => { void importFolder(event.target.files); event.target.value = ""; }} /></label>
         <button type="button" className="set-button" onClick={refresh}>Atualizar</button>
         {user && (confirm === user.id
           ? <button type="button" className="set-button set-danger" onClick={() => void remove(user.id)}>Remover {user.name}?</button>
@@ -147,13 +153,16 @@ export function AppearanceSection({ settings, bridge }: { settings: Settings; br
   const setMascot = (patch: Partial<MascotSettings>) => settings.edit({ ...settings.draft, mascot: { ...mascot, ...patch } });
   const theme = useTheme(bridge ?? noBridge, mascot.theme);
   const themed = Boolean(theme.images);
+  // Tema com HUD define brilho e destaque: os controles ficam desligados, com aviso.
+  const hudOwns = Boolean(theme.hud);
   return <>
     <Preview settings={settings} label="Prévia do notch" theme={theme} />
     <ThemeGroup bridge={bridge} value={mascot.theme ?? "eyes"} onPick={id => setMascot({ theme: id })} />
     <Group title="Ilha">
+      {hudOwns && <p className="set-desc set-note">O tema escolhido define a cor de destaque e o brilho do notch.</p>}
       <Row title="Opacidade do notch fechado" desc="Quanto do fundo aparece através da ilha compacta. Aplicado ao salvar."><Slider value={appearance.opacity} min={30} max={100} label="Opacidade do notch fechado" onChange={opacity => set({ opacity })} /></Row>
       <Row title="Cor de destaque" desc="Botões principais, interruptores, barras de progresso e seleções." wide>
-        <span className="set-swatches">{accents.map(color => <button key={color} type="button" className="set-swatch" style={{ ["--swatch" as string]: color }} aria-label={`Destaque ${color}`} aria-pressed={appearance.accentColor.toUpperCase() === color} onClick={() => set({ accentColor: color })} />)}
+        <span className="set-swatches">{accents.map(color => <button key={color} type="button" className="set-swatch" disabled={hudOwns} style={{ ["--swatch" as string]: color }} aria-label={`Destaque ${color}`} aria-pressed={appearance.accentColor.toUpperCase() === color} onClick={() => set({ accentColor: color })} />)}
           <label className="set-swatch set-swatch-custom" title="Outra cor"><input type="color" aria-label="Outra cor de destaque" value={appearance.accentColor} onChange={event => set({ accentColor: event.target.value.toUpperCase() })} /></label></span>
       </Row>
       <Row title="Animações" desc="Reduzido troca molas e deslizes por transições curtas. Sistema segue o Windows."><Segmented label="Animações" value={settings.draft.motion.reducedMotion} options={[["system", "Sistema"], ["on", "Reduzido"], ["off", "Completo"]]} onChange={reducedMotion => settings.edit({ ...settings.draft, motion: { reducedMotion } })} /></Row>
@@ -163,7 +172,7 @@ export function AppearanceSection({ settings, bridge }: { settings: Settings; br
       <Row title="Formato dos olhos" wide><span className="set-options">{shapes.map(([shape, label]) => <button key={shape} type="button" className="set-option" disabled={themed} aria-pressed={mascot.eyeShape === shape} onClick={() => setMascot({ eyeShape: shape })}><Mascot expression="normal" active={false} reducedMotion shape={shape} color={mascot.eyeColor} /><span>{label}</span></button>)}</span></Row>
       <Row title="Cor dos olhos" wide><span className="set-swatches">{eyeColors.map(([color, label]) => <button key={color} type="button" className="set-swatch" disabled={themed} style={{ ["--swatch" as string]: color }} aria-label={`Olhos ${label.toLowerCase()}`} title={label} aria-pressed={mascot.eyeColor.toUpperCase() === color} onClick={() => setMascot({ eyeColor: color })} />)}</span></Row>
       <Row title="Brilho" desc="A luz atrás do mascote, no notch e no painel." wide>
-        <span className="set-swatches">{(Object.keys(glowPresets) as (keyof typeof glowPresets)[]).map(name => <button key={name} type="button" className="set-swatch" style={{ ["--swatch" as string]: `linear-gradient(135deg, ${glowPresets[name].join(", ")})` }} aria-label={`Brilho ${glowNames[name]}`} title={glowNames[name]} aria-pressed={mascot.glow === name} onClick={() => setMascot({ glow: name })} />)}
+        <span className="set-swatches">{(Object.keys(glowPresets) as (keyof typeof glowPresets)[]).map(name => <button key={name} type="button" className="set-swatch" disabled={hudOwns} style={{ ["--swatch" as string]: `linear-gradient(135deg, ${glowPresets[name].join(", ")})` }} aria-label={`Brilho ${glowNames[name]}`} title={glowNames[name]} aria-pressed={mascot.glow === name} onClick={() => setMascot({ glow: name })} />)}
           <label className="set-swatch set-swatch-custom" title="Outra cor" data-active={mascot.glow === "custom" || undefined}><input type="color" aria-label="Outra cor de brilho" value={mascot.glowColor} onChange={event => setMascot({ glow: "custom", glowColor: event.target.value.toUpperCase() })} /></label></span>
       </Row>
       <Row title="Ritmo"><Segmented label="Ritmo" value={mascot.pace} options={[["calm", "Calmo"], ["lively", "Animado"]]} onChange={pace => setMascot({ pace })} /></Row>
@@ -199,7 +208,7 @@ export function SoundSection({ settings }: { settings: Settings }) {
 
 // Páginas que dependem de um recurso: esconder a página também desliga a coleta dele.
 const pageModule: Partial<Record<string, "claudeUsage" | "systemInfo">> = { limits: "claudeUsage", system: "systemInfo" };
-const pageHints: Partial<Record<string, string>> = { media: "Música e vídeo tocando, com capa, controles e letra.", limits: "Cota de 5 horas e semanal do Claude.", system: "CPU, memória, bateria e rede.", sports: "Placar ao vivo dos times seguidos.", agenda: "Compromissos locais e agendas assinadas.", water: "Meta do dia e lembretes de água.", shelf: "Arquivos à mão, inclusive do celular.", prompter: "Roteiro rolando e gravação de tela." };
+const pageHints: Partial<Record<string, string>> = { media: "Música e vídeo tocando, com capa, controles e letra.", limits: "Cota de 5 horas e semanal do Claude.", system: "CPU, memória, bateria e rede.", sports: "Placar ao vivo dos times seguidos.", agenda: "Compromissos locais e agendas assinadas.", water: "Meta do dia e lembretes de água.", pet: "Bichinho virtual: barras, nível, missões, loja e mini-jogos. Escondido, o mascote perde os acessórios e o bichinho para de contar.", shelf: "Arquivos à mão, inclusive do celular.", prompter: "Roteiro rolando e gravação de tela." };
 
 /** Páginas e recursos: arraste para ordenar; o interruptor mostra/esconde (e liga/desliga o recurso da página). */
 export function PagesSection({ settings, notificationStatus }: { settings: Settings; notificationStatus?: string }) {

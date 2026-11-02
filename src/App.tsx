@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { createShellBridge, type ShellBridge } from "./lib/shellBridge";
 import { useIsland } from "./hooks/useIsland";
 import { useSettings } from "./hooks/useSettings";
@@ -214,6 +214,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   }, [bridge, settings.loadState, settings.saved.modules.notifications]);
   // Tema do mascote (imagens, fonte, sons, cores, textos): o salvo, para o notch não mudar no rascunho.
   const theme = useTheme(bridge, { ...defaultMascot, ...settings.saved.mascot }.theme);
+  // Variáveis do HUD (podem trazer data: URLs grandes): recalcula só quando o tema muda.
+  const hudVars = useMemo(() => hudStyle(theme.hud), [theme.hud]);
   const activity = useActivity(context.desktop.failed ? null : desktop ?? null, activityEnabled, sports.snapshot, sports.config?.teams ?? [], waterNudge, pushed.pending, theme.copy?.mapFor);
   useEffect(() => {
     if (!activity) return;
@@ -262,6 +264,18 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const singing = Boolean(lyricLine && !activity && !liveGame && !waterShow);
   // Avisos (menos a troca de música, que tem animação própria) abrem em meio-notch.
   const toast = activity && activity.kind !== "track" ? activity : null;
+  // Fim do aviso: o texto sai em 160 ms enquanto a pílula encolhe (antes sumia num quadro).
+  const [leavingToast, setLeavingToast] = useState<Activity | null>(null);
+  const lastToast = useRef<Activity | null>(null);
+  useEffect(() => {
+    const gone = lastToast.current;
+    lastToast.current = toast;
+    if (toast || !gone || reducedMotion || island.expanded || island.hidden) { setLeavingToast(null); return; }
+    setLeavingToast(gone);
+    const timer = window.setTimeout(() => setLeavingToast(null), 160);
+    return () => window.clearTimeout(timer);
+  }, [toast?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toastShown = toast ?? leavingToast;
   const recNow = useNow(recorder.busy, 500);
   const recShow = recorder.busy && !toast;
   const countShow = recorder.countdown != null;
@@ -299,41 +313,56 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     lastSports.current = sports.snapshot;
     for (const { id, result } of sportsResults(before, sports.snapshot, sports.config?.teams ?? [])) petControl.event({ kind: result === "win" ? "teamWin" : "teamLoss", id });
   }, [sports.snapshot]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Gravação de 3 min ou mais vira foco do bichinho.
-  const recording = useRef<{ state: string; at: number; elapsed: number }>({ state: "idle", at: 0, elapsed: 0 });
+  // Gravação de 3 min ou mais vira foco do bichinho. O total chega ao parar ("saving"):
+  // durante a gravação o Rust só manda o tempo nas pausas.
+  const recordingSince = useRef(0);
   useEffect(() => {
-    const before = recording.current, now = recorder.state;
-    if ((before.state === "recording" || before.state === "paused") && (now.state === "idle" || now.state === "saving") && before.elapsed >= 180_000) {
-      petControl.event({ kind: "focus", minutes: Math.round(before.elapsed / 60_000), id: `rec:${before.at}` });
+    const now = recorder.state;
+    if (now.state === "recording" && !recordingSince.current) recordingSince.current = Date.now();
+    if (now.state === "saving" && recordingSince.current) {
+      if ((now.elapsedMs ?? 0) >= 180_000) petControl.event({ kind: "focus", minutes: Math.round(now.elapsedMs / 60_000), id: `rec:${recordingSince.current}` });
+      recordingSince.current = 0;
     }
-    recording.current = { state: now.state, at: before.state === "idle" ? Date.now() : before.at, elapsed: Math.max(before.elapsed * (before.state === "idle" ? 0 : 1), now.elapsedMs ?? 0) };
-  }, [recorder.state.state, recorder.state.elapsedMs]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Voltou depois de 5 min ou mais longe do PC: pausa (energia).
+    if (now.state === "idle" || now.state === "error") recordingSince.current = 0;
+  }, [recorder.state.state]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Voltou depois de 5 min ou mais longe do PC: pausa (energia). Qualquer saída do
+  // descanso conta (passar o mouse no notch vai direto para "attention").
   const restSince = useRef(0);
   useEffect(() => {
     if (presence.phase === "rest") { if (!restSince.current) restSince.current = Date.now(); return; }
-    if (presence.phase === "greeting" && restSince.current) {
+    if (presence.phase === "drowsy") return;
+    if (restSince.current) {
       const minutes = (Date.now() - restSince.current) / 60_000;
       if (minutes >= 5) petControl.event({ kind: "break", minutes: Math.round(minutes) });
     }
-    if (presence.phase !== "drowsy") restSince.current = 0;
+    restSince.current = 0;
   }, [presence.phase]); // eslint-disable-line react-hooks/exhaustive-deps
   const resting = presence.phase === "rest" && !activity;
   const hour = new Date().getHours(), night = hour >= 22 || hour < 6;
   const compactExpression: MascotExpression = activity ? (glance ? "wide" : activity.mood)
     : resting ? "sleep" : presence.phase === "drowsy" ? "yawn" : island.hovered || presence.phase !== "context" ? "wide"
-    : petControl.enabled && petControl.mood.critical ? petControl.mood.expression : playing ? "happy" : night ? "sleepy" : "normal";
+    // Bichinho crítico só no expediente e nunca acima da música (não vira cobrança o dia todo).
+    : playing ? "happy" : petControl.enabled && petControl.mood.critical && petControl.working ? petControl.mood.expression : night ? "sleepy" : "normal";
   // Ao acordar e de vez em quando, os olhos acompanham o cursor por alguns segundos.
   const gaze = useMascotGaze(bridge, presence.phase, settings.loadState === "ready" && !island.expanded && !away && !reducedMotion && settings.draft.mascot?.look !== false);
-  const compactLook = activity && glance ? { x: -3.5, y: 0 } : gaze ?? presence.look;
+  const compactLook = activity && glance ? { x: -3.5, y: 0 } : presence.look;
+  // Olhar seguindo o cursor: amostras escritas direto no mascote, sem rerenderizar o App.
+  const compactFollow = activity && glance ? undefined : gaze ?? undefined;
   // Faixa nova: o mascote sai pelo topo, banda e música ocupam o centro e ele volta.
   const trackShow = activity?.kind === "track" ? activity : null;
   const [mascotBack, setMascotBack] = useState(0);
-  const hadTrack = useRef(false);
+  const hadTrack = useRef(false), backKey = useRef(0);
   useEffect(() => {
     if (trackShow) { hadTrack.current = true; return; }
-    if (hadTrack.current) { hadTrack.current = false; setMascotBack(value => value + 1); }
+    if (hadTrack.current) { hadTrack.current = false; setMascotBack(++backKey.current); }
   }, [Boolean(trackShow)]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A volta é um evento, não um estado: limpa depois da animação (420 ms) para não repetir a
+  // cada remontagem nem cobrir o pulo do anúncio e o balanço feliz.
+  useEffect(() => {
+    if (!mascotBack) return;
+    const timer = window.setTimeout(() => setMascotBack(0), 450);
+    return () => window.clearTimeout(timer);
+  }, [mascotBack]);
   // Na página do bichinho o humor dele aparece (a água brava continua vencendo).
   const openExpression: MascotExpression = (page === "water" || page === "pet") && waterPending ? waterMood : page === "pet" ? petControl.mood.expression : page === "media" && playing ? "happy" : page === "limits" && quotaLow(context) ? "worried" : "normal";
 
@@ -397,13 +426,17 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const accentLight = (([r, g, b]) => .2126 * r + .7152 * g + .0722 * b)([1, 3, 5].map(i => parseInt(accent.slice(i, i + 2), 16))) > 150;
   const style = { "--island-opacity": page === "prompter" && island.expanded ? (notes.prompter.opacity ?? 100) / 100 : settings.draft.appearance.opacity / 100, "--primary": accent, "--on-primary": accentLight ? "#171717" : "#ffffff",
     "--glow-a": glow[0], "--glow-b": glow[1], "--glow-c": glow[2], "--glow-shadow": `${glow[1]}cc`, "--glow-shadow-soft": `${glow[1]}66`,
-    "--font-sans": theme.fontFamily, "--theme-ground": theme.colors?.ground, "--theme-accent": theme.colors?.accent, "--theme-text": theme.colors?.text, ...hudStyle(theme.hud) } as CSSProperties;
+    "--font-sans": theme.fontFamily, "--theme-ground": theme.colors?.ground, "--theme-accent": theme.colors?.accent, "--theme-text": theme.colors?.text, ...hudVars } as CSSProperties;
   const themed = (expression: MascotExpression) => ({ image: moodImage(expression, theme.images), pixelated: theme.pixelated });
+  // Brilho da borda: só com o painel aberto e visível (em repouso o SMIL pintaria a 60 Hz o dia todo).
+  const shimmerOn = Boolean(theme.hud?.shimmer && theme.hud.border) && island.expanded && !away && !reducedMotion;
+  // Tema novo chegou: as camadas do HUD nasceram sem forma; pinta já, sem esperar o notch se mexer.
+  useEffect(() => { island.repaint(); }, [theme.id, Boolean(theme.hud), theme.hud?.lines.length, Boolean(theme.hud?.corner || theme.hud?.crest)]); // eslint-disable-line react-hooks/exhaustive-deps
   const mascotLook = mascotPrefs.look ? undefined : { x: 0, y: 0 };
   const feedback = !bridge.desktop ? "Salvar no aplicativo desktop." : settings.loadState === "loading" ? "Carregando…" : settings.loadState === "error" ? "Falha ao carregar." : settings.saveState === "error" ? "Falha ao salvar. Rascunho preservado." : settings.saveState === "saving" ? "Salvando…" : settings.saveState === "saved" ? "Configurações salvas." : settings.dirty ? "Alterações não salvas." : "";
   const pageIndex = contextPages.indexOf(page);
 
-  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toast || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
+  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
     onMouseMove={island.pointerMove} onMouseLeave={island.pointerLeave}
     onBlurCapture={event => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
@@ -448,7 +481,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <linearGradient id="hud-bevel" x1="0" y1="0" x2="0" y2="1"><stop offset=".45" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#000" stopOpacity=".65" /></linearGradient>
         <linearGradient id="hud-shimmer" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0" stopColor="#fff" stopOpacity="0" /><stop offset=".08" stopColor="#fff" stopOpacity=".95" /><stop offset=".16" stopColor="#fff" stopOpacity="0" />
-          {!reducedMotion && <animateTransform attributeName="gradientTransform" type="translate" values="-0.3 0; 1.3 0; 1.3 0" keyTimes="0; .45; 1" dur="7s" repeatCount="indefinite" />}
+          {shimmerOn && <animateTransform attributeName="gradientTransform" type="translate" values="-0.3 0; 1.3 0; 1.3 0" keyTimes="0; .45; 1" dur="7s" repeatCount="indefinite" />}
         </linearGradient>
       </defs>}
       <path data-notch-path="" />
@@ -459,7 +492,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <path data-notch-edge="" mask={`url(#hud-line-${index})`} style={{ fill: "none", stroke: line.color, strokeWidth: (line.inset + line.width) * 2 }} />
       </g>)}
       {theme.hud?.border && <path className="island-edge" data-notch-edge="" />}
-      {theme.hud?.shimmer && theme.hud.border && !reducedMotion && <path className="island-shimmer" data-notch-edge="" />}
+      {shimmerOn && <path className="island-shimmer" data-notch-edge="" />}
     </svg>
     {/* Joias nas junções do filete (onde as retas encontram as curvas) e o brasão no topo. */}
     {(theme.hud?.corner || theme.hud?.crest) && <span className="hud-ornaments" aria-hidden="true" data-prompter={page === "prompter" || undefined} style={{ ["--hud-inset" as string]: `${theme.hud.lines[0] ? theme.hud.lines[0].inset + theme.hud.lines[0].width / 2 : 6}px` }}>
@@ -467,7 +500,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {theme.hud.crest && <i className="hud-crest" />}
     </span>}
     {island.viewportExpanded && <section className="panel" data-tall={askTall && page === "ask" || undefined} data-no-face={mascotPrefs.inPanel === false || undefined} data-home={page === "home" || undefined} data-prompter={page === "prompter" || undefined} ref={island.panelRef} tabIndex={-1} aria-labelledby="panel-heading" aria-hidden={!island.expanded}>
-      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} {...themed((mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression)} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook ?? mascotTouch.touch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
+      <div className="panel-face" {...mascotTouch.handlers}><span className="face-glow" aria-hidden="true" /><Mascot size="large" expression={(mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression} {...themed((mascotPrefs.reactions ? mascotTouch.touch.expression : null) ?? openExpression)} active={island.expanded && !island.hidden} reducedMotion={reducedMotion} look={mascotLook} follow={mascotLook ? undefined : mascotTouch.look} reaction={mascotPrefs.reactions ? mascotTouch.touch.reaction : null} shape={mascotPrefs.eyeShape} color={waterAngry && page === "water" ? "#ff453a" : petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></div>
       <form className={`page-form ${preferences && page !== "sportsPrefs" && page !== "calendarPrefs" || settings.loadState === "error" || island.error ? "with-footer" : ""}`} onSubmit={submit}>
         <h1 id="panel-heading" className="sr-only" ref={heading} tabIndex={-1}>{pageNames[page]}</h1>
         <div className="page-viewport" ref={pageMotion.ref}>
@@ -493,11 +526,11 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     </section>}
     <button className="compact-button" ref={compactRef} aria-label="Abrir Heydesk" aria-expanded={island.expanded} aria-hidden={island.expanded} tabIndex={island.expanded ? -1 : 0} onClick={event => island.change(true, true, event.detail === 0)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); island.change(true, true, true); } }}>
       <span className="mascot-ambient" aria-hidden="true" />
-      {toast && (view => <span className="toast" key={`toast-${toast.id}`} data-tone={toast.tone} data-kind={toast.kind}>
-        <span className="toast-icon" style={view.ring != null ? { ["--ring" as string]: `${view.ring}%` } : undefined} data-ring={view.ring != null || undefined}><ActivityIcon icon={toast.icon} /></span>
+      {toastShown && (view => <span className="toast" key={`toast-${toastShown.id}`} data-tone={toastShown.tone} data-kind={toastShown.kind} data-leaving={!toast || undefined} aria-hidden={!toast || undefined}>
+        <span className="toast-icon" style={view.ring != null ? { ["--ring" as string]: `${view.ring}%` } : undefined} data-ring={view.ring != null || undefined}><ActivityIcon icon={toastShown.icon} /></span>
         <span className="toast-text"><b>{view.title}</b><span>{view.sub}</span></span>
-        {view.big ? <span className="toast-big">{view.big}</span> : <span className="toast-face"><Mascot expression={toast.mood} {...themed(toast.mood)} active={!island.expanded} reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></span>}
-      </span>)(toastView(toast))}
+        {view.big ? <span className="toast-big">{view.big}</span> : <span className="toast-face"><Mascot expression={toastShown.mood} {...themed(toastShown.mood)} active={!island.expanded} reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} /></span>}
+      </span>)(toastView(toastShown))}
       {countShow && <span className="toast rec-count" key={`count-${recorder.countdown}`}><b>{recorder.countdown}</b><span>Gravando em…</span></span>}
       {recShow && !countShow && !waterShow && <span className="rec-compact" data-paused={recorder.state.state === "paused" || undefined}><i />{recorder.state.state === "paused" ? "Pausado" : "REC"}<b>{recClock(recordedMs(recorder.state, recNow))}</b></span>}
       {waterShow ? <span className="compact-side compact-left compact-water" key={`w${waterPulse}`}><ActivityIcon icon="drop" /></span>
@@ -513,7 +546,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <b className="score-team" data-side={csSide(sports.csLive?.gameId === liveGame.id ? sports.csLive : null, liveGame.away)}>{teamTag(liveGame.away)}</b>
         <span className="score-logo">{liveGame.away.logo ? <img src={liveGame.away.logo} alt="" /> : liveGame.away.name.slice(0, 1)}</span>
       </span>}
-      {!activity && (liveGame || waterShow) ? null : trackShow || singing ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} shape={mascotPrefs.eyeShape} color={petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
+      {/* Faixa nova: o mascote fica montado e sai pelo topo (reação "away"); sem reações, sai de cena. */}
+      {!activity && (liveGame || waterShow) ? null : singing || trackShow && !mascotPrefs.reactions ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} follow={mascotLook ? undefined : compactFollow} shape={mascotPrefs.eyeShape} color={petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : trackShow ? { kind: "away", key: trackShow.id } : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
       {singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
       {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.label} — ${trackShow.value}`}><b>{trackShow.label}</b><span>{trackShow.value}</span></span>}
       {waterShow ? <span className="compact-side compact-right compact-water"><span className="water-pill">abrir</span></span>
@@ -538,14 +572,15 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
         <button type="button" className="water-yes" onClick={() => { if (waterNow.due === "refill") { notes.refillWater(); return; } notes.drink(); setWaterThanks({ level: waterLevel, key: Date.now() }); }}>{copy.yes}</button>
       </span>
     </div>)(themeWater(waterCopy(waterNow, notes.water, waterTick), waterNow.level, theme.copy?.water))}
-    {updateShow && updateInfo && !thanksShow && !toast && !countShow && !island.expanded && <div className="water-card update-card" role="alertdialog" aria-label={`Versão ${updateInfo.version} disponível`} data-kind="update">
+    {updateShow && updateInfo && !thanksShow && !toast && !countShow && !island.expanded && <div className="water-card update-card" role="status" aria-live="polite" aria-label={update.state.kind === "installing" ? "Baixando atualização" : update.state.kind === "error" ? "Atualização falhou" : `Versão ${updateInfo.version} disponível`} data-kind="update" data-error={update.state.kind === "error" || undefined}>
       <span className="water-card-face"><Mascot expression={update.state.kind === "installing" ? "wide" : "happy"} {...themed(update.state.kind === "installing" ? "wide" : "happy")} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
       <span className="toast-text">
-        <b>{update.state.kind === "installing" ? `Atualizando para ${updateInfo.version}…` : `Heydesk ${updateInfo.version} disponível`}</b>
-        <span>{update.state.kind === "installing" ? (update.state.percent ? `Baixando: ${update.state.percent}%. O Heydesk reabre sozinho.` : "Preparando o download…") : update.state.kind === "error" ? update.state.message : noteLine(updateInfo.notes) || `Você está na ${updateInfo.current}.`}</span>
+        <b>{update.state.kind === "installing" ? `Atualizando para ${updateInfo.version}…` : update.state.kind === "error" ? "Não deu para atualizar" : `Heydesk ${updateInfo.version} disponível`}</b>
+        <span>{update.state.kind === "installing" ? (update.state.percent ? `Baixando: ${update.state.percent}%. O Heydesk reabre sozinho.` : "Preparando o download…") : update.state.kind === "error" ? update.state.message : noteLine(updateInfo.notes) || `Você usa a versão ${updateInfo.current}.`}</span>
       </span>
       <span className="water-card-actions">
-        {update.state.kind === "installing" ? <span className="update-progress" role="progressbar" aria-valuenow={update.state.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ transform: `scaleX(${update.state.percent / 100})` }} /></span>
+        {update.state.kind === "installing" ? <><span className="update-progress" role="progressbar" aria-label="Progresso do download" aria-valuenow={update.state.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ transform: `scaleX(${update.state.percent / 100})` }} /></span>
+            <button type="button" className="water-no" onClick={update.dismiss}>Ocultar</button></>
           : <><button type="button" className="water-no" onClick={update.dismiss}>Depois</button>
             <button type="button" className="water-yes" onClick={() => void update.install()}>{update.state.kind === "error" ? "Tentar de novo" : "Atualizar"}</button></>}
       </span>

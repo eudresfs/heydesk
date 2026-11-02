@@ -35,11 +35,15 @@ const packs: Record<SoundPack, { wave: OscillatorType; attack: number; release: 
 };
 
 let context: AudioContext | null = null;
-/** Contexto de áudio compartilhado (também decodifica os sons dos temas). */
+let idleTimer = 0;
+/** Contexto de áudio compartilhado (também decodifica os sons dos temas). Fica suspenso
+ *  quando ninguém toca nada por 5 s: rodando, ele acorda a CPU a cada poucos ms o dia todo. */
 export function audioContext() {
   if (typeof window === "undefined" || typeof window.AudioContext === "undefined") return null;
   context ??= new AudioContext();
   if (context.state === "suspended") void context.resume().catch(() => {});
+  window.clearTimeout(idleTimer);
+  idleTimer = window.setTimeout(() => { if (context?.state === "running") void context.suspend().catch(() => {}); }, 5000);
   return context;
 }
 

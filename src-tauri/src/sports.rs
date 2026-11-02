@@ -244,7 +244,7 @@ fn fetch_league(client: &reqwest::blocking::Client, league: &str, token: Option<
         for offset in 0..=days {
             let date = (today + Days::days(offset)).format("%Y%m%d").to_string();
             let body = client.get(format!("{ESPN}/{path}/scoreboard")).query(&[("dates", date.as_str())]).send()
-                .and_then(|response| response.error_for_status()).and_then(|response| response.text())
+                .and_then(|response| response.error_for_status()).and_then(read_limited)
                 .map_err(|_| "ESPN indisponível.".to_string())?;
             games.extend(parse_espn(league, &body));
         }
@@ -259,7 +259,7 @@ fn fetch_league(client: &reqwest::blocking::Client, league: &str, token: Option<
         if !live_only { queries.push(vec![("filter[matches.status][in]", "upcoming".into()), ("filter[matches.start_date][lte]", until), ("sort", "start_date".into())]); }
         for mut query in queries {
             query.extend([("filter[matches.discipline_id][eq]", "1".to_string()), ("page[limit]", "50".to_string()), ("with", "teams,games,tournament".to_string())]);
-            let body = client.get(BO3).query(&query).send().and_then(|response| response.error_for_status()).and_then(|response| response.text())
+            let body = client.get(BO3).query(&query).send().and_then(|response| response.error_for_status()).and_then(read_limited)
                 .map_err(|_| "bo3.gg indisponível.".to_string())?;
             games.extend(parse_bo3(league, &body));
         }
@@ -273,7 +273,7 @@ fn fetch_league(client: &reqwest::blocking::Client, league: &str, token: Option<
                 .map_err(|_| "PandaScore indisponível.".to_string())?;
             if response.status().as_u16() == 401 { return Err("Chave do PandaScore recusada.".into()); }
             if response.status().as_u16() == 429 { return Err("Limite grátis do PandaScore atingido por agora.".into()); }
-            games.extend(parse_panda(league, &response.text().map_err(|_| "Resposta do PandaScore inválida.".to_string())?));
+            games.extend(parse_panda(league, &read_limited(response).map_err(|_| "Resposta do PandaScore inválida.".to_string())?));
         }
         return Ok(games);
     }
@@ -281,10 +281,12 @@ fn fetch_league(client: &reqwest::blocking::Client, league: &str, token: Option<
 }
 
 pub fn league_teams(league: &str, token: Option<&str>) -> Result<Vec<TeamOption>, String> {
+    // Só competições do catálogo (o id entra na URL das APIs, junto com a chave).
+    if !CATALOG.iter().any(|(id, _, _)| *id == league) { return Err("Competição desconhecida.".into()); }
     if league == crate::hltv::LEAGUE { return crate::hltv::teams(); }
     let client = client().ok_or("Sem rede.")?;
     if let Some(path) = league.strip_prefix("espn:") {
-        let body = client.get(format!("{ESPN}/{path}/teams")).send().and_then(|response| response.text()).map_err(|_| "ESPN indisponível.".to_string())?;
+        let body = client.get(format!("{ESPN}/{path}/teams")).send().and_then(read_limited).map_err(|_| "ESPN indisponível.".to_string())?;
         let json: Value = serde_json::from_str(&body).map_err(|_| "Resposta da ESPN inválida.".to_string())?;
         let mut teams: Vec<TeamOption> = json.pointer("/sports/0/leagues/0/teams").and_then(Value::as_array).into_iter().flatten().filter_map(|item| Some(TeamOption {
             id: str_at(item, "/team/id")?.to_string(), name: str_at(item, "/team/displayName")?.to_string(), logo: str_at(item, "/team/logos/0/href").map(String::from),
@@ -464,4 +466,15 @@ mod tests {
         assert_eq!(arranged[0].state, "in");
         assert!(arranged.iter().all(|game| game.followed));
     }
+}
+
+/// Corpo da resposta com teto (5 MB): um servidor hostil ou quebrado não esgota a memória.
+pub(crate) fn read_limited(response: reqwest::blocking::Response) -> reqwest::Result<String> {
+    use std::io::Read;
+    const MAX: u64 = 5 * 1024 * 1024;
+    let mut bytes = Vec::new();
+    let mut limited = response.take(MAX + 1);
+    let _ = limited.read_to_end(&mut bytes);
+    bytes.truncate(MAX as usize);
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }

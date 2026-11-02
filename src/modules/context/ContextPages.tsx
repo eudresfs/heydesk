@@ -403,7 +403,7 @@ function Tasks({ notes }: { notes?: NotesControl }) {
         <button type="button" className="task-star" aria-pressed={todo.starred} aria-label={todo.starred ? `Desfavoritar ${todo.text}` : `Favoritar ${todo.text}`} onClick={() => notes.toggleTodo(todo.id, "starred")}><svg width="13" height="13" viewBox="0 0 24 24" fill={todo.starred ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" /></svg></button>
         <button type="button" className="task-remove" aria-label={`Apagar ${todo.text}`} onClick={() => notes.removeTodo(todo.id)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
       </li>)}
-      {!pending.length && <li className="task-empty hd-enter">{notes.state === "loading" ? <span className="hd-shimmer">Carregando</span> : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></svg>Nada pendente. Escreva acima e Enter.</>}</li>}
+      {!pending.length && <li className="task-empty">{notes.state === "loading" ? <span className="hd-shimmer">Carregando</span> : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8 12l3 3 5-6" /></svg>Nada pendente. Escreva acima e Enter.</>}</li>}
     </ul>
     <p className="task-footer">
       {pending.length > visibleTodos && <span>+{pending.length - visibleTodos} pendentes</span>}
@@ -452,7 +452,7 @@ function Agenda({ notes, calendars, onConfigure }: { notes?: NotesControl; calen
       <span className="agenda-title">{selected === today ? "Hoje" : (text => text.charAt(0).toUpperCase() + text.slice(1))(day.toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "short" }))}
         <button type="button" className="agenda-feeds" onClick={onConfigure} title={calendars?.errors.join("\n") || "Assinar agendas do Google, iCloud ou Outlook"} data-error={calendars?.errors.length ? "" : undefined}>{calendars?.feeds.length ? `${calendars.feeds.length} agenda${calendars.feeds.length > 1 ? "s" : ""}` : "Assinar agenda"}</button></span>
       <ul className="agenda-list">
-        {list.slice(0, visibleEvents).map(row => <li key={row.id} className="agenda-item hd-enter" data-past={!row.allDay && row.at < now || undefined} title={row.feed ? row.feed.feed : row.reminders?.length ? `Lembretes ${row.reminders.join(" e ")} min antes` : undefined}>
+        {list.slice(0, visibleEvents).map(row => <li key={row.id} className="agenda-item" data-past={!row.allDay && row.at < now || undefined} title={row.feed ? row.feed.feed : row.reminders?.length ? `Lembretes ${row.reminders.join(" e ")} min antes` : undefined}>
           <span className="agenda-time" style={row.feed ? { color: row.feed.color } : undefined}>{row.allDay ? "dia todo" : clockOf(row.at)}</span>
           <span className="agenda-name">{row.feed && <i className="agenda-dot" style={{ background: row.feed.color }} />}<span>{row.title}</span></span>
           {row.feed ? <span /> : <button type="button" className="task-remove" aria-label={`Apagar ${row.title}`} onClick={() => notes.removeEvent(row.id)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>}
@@ -490,7 +490,7 @@ function ShelfCard({ item, shelf, now }: { item: ShelfItem; shelf: ShelfControl;
   const thumb = useThumbnail(shelf.bridge, item.id);
   // Arrastar para fora: depois de mover 5 px com o botão apertado, o Windows assume o arrasto.
   const press = useRef<{ x: number; y: number; dragged: boolean } | null>(null);
-  return <li className="shelf-card hd-enter" title={`${item.name} · arraste para fora ou clique para abrir`}>
+  return <li className="shelf-card" title={`${item.name} · arraste para fora ou clique para abrir`}>
     <button type="button" className="shelf-thumb" aria-label={`Abrir ${item.name}`} draggable={false}
       onPointerDown={event => { if (event.button === 0) press.current = { x: event.clientX, y: event.clientY, dragged: false }; }}
       onPointerMove={event => { const start = press.current; if (!start || start.dragged || (event.buttons & 1) === 0) return; if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 5) { start.dragged = true; shelf.drag(item.id); } }}
@@ -602,7 +602,7 @@ function WaterPage({ notes }: { notes?: NotesControl }) {
   const hhmm = (ms: number) => new Date(ms).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   if (plan.due) {
     const copy = waterCopy(plan, water, now);
-    return <div className="water-due hd-enter" data-level={plan.level}>
+    return <div className="water-due" data-level={plan.level}>
       <svg className="water-due-icon" width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5s-6.5 7.2-6.5 12A6.5 6.5 0 0 0 18.5 14.5C18.5 9.7 12 2.5 12 2.5z" /></svg>
       <div className="water-due-text"><strong>{copy.title}</strong><span>{copy.sub}</span><span className="water-due-meta">Hoje {liters(total)} de {liters(water.goalMl)} L · {share}%</span></div>
       <div className="water-due-actions">
@@ -663,7 +663,7 @@ function weekdays(days: number[]) {
 function WaterSettings({ notes, onDone }: { notes: NotesControl; onDone(): void }) {
   const water = notes.water, settings = waterSettings(water), sips = Math.ceil(water.goalMl / settings.sip);
   const ml = (value: string, min: number, max: number) => { const n = Math.round(Number(value)); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : null; };
-  return <div className="water-settings hd-enter">
+  return <div className="water-settings">
     <div className="water-head"><span className="water-title">Ajustes da água</span><button type="button" className="chip" onClick={onDone}>Pronto</button></div>
     <div className="water-form">
       <label>Meta do dia<span><input className="hd-input" type="number" min="0.5" max="10" step="0.25" value={water.goalMl / 1000} onChange={event => { const n = Number(event.target.value); if (n >= .5 && n <= 10) notes.setWater({ goalMl: Math.round(n * 1000) }); }} />L</span></label>
@@ -721,7 +721,7 @@ function AskPage({ ask }: { ask?: AskControl & { tall: boolean; setTall(value: b
           : turn.answer ? <p className="ask-text">{turn.answer.split(/(\s+)/).map((word, at) => <span className="hd-word" key={at}>{word}</span>)}</p>
           : ask.busy && turn === last ? <p className="ask-text"><span className="hd-shimmer">Pensando</span></p> : null}
         {turn.answer && !(ask.busy && turn === last) && <button type="button" className="icon-button ask-copy" data-done={copied === String(index) || undefined} aria-label={copied === String(index) ? "Copiado" : "Copiar resposta"} title="Copiar resposta" onClick={() => copy(turn.answer, String(index))}><AskIcon name={copied === String(index) ? "check" : "copy"} /></button>}
-      </div>) : <div className="ask-empty hd-enter">
+      </div>) : <div className="ask-empty">
         <p className="ask-model"><svg className="claude-mark" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">{Array.from({ length: 12 }, (_, ray) => <rect key={ray} x="11.1" y="1.5" width="1.8" height="9" rx=".9" transform={`rotate(${ray * 30} 12 12)`} />)}</svg>Haiku 5.5<span>· esforço médio</span></p>
         <div className="ask-suggestions">{["Escreva um e-mail curto pedindo um prazo", "Me dê 3 ideias de nome", "Explique um conceito em uma frase"].map(text => <button key={text} type="button" className="chip" onClick={() => { setDraft(text); field.current?.focus(); }}>{text}</button>)}</div>
       </div>}
