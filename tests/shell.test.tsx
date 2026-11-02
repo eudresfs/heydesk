@@ -917,7 +917,10 @@ test("lembrete de água no compacto tem os dois botões, recusa conta e o mascot
   await act(async () => no.click()); await advance(10);
   assert.equal(saves.at(-1)?.water?.skips?.length, 3);
   assert.ok((saves.at(-1)?.water?.snoozeUntil ?? 0) > Date.now() + 14 * 60_000, "soneca de 15 min");
-  assert.equal(host.querySelector(".water-card"), null, "some durante a soneca");
+  assert.equal(host.querySelector(".water-card:not([data-leaving])"), null, "some durante a soneca");
+  assert.ok(host.querySelector(".water-card[data-leaving]"), "sai em fade, sem sumir num quadro");
+  await advance(200);
+  assert.equal(host.querySelector(".water-card"), null, "e some depois da saída");
 });
 
 test("bebeu com o mascote bravo: ele se acalma, agradece e o cartão some", async () => {

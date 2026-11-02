@@ -83,7 +83,11 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
       // Abrindo, o conteúdo chega antes do fim da mola; fechando, sai primeiro, antes de o notch encolher.
       panel.current.style.opacity = String(opening ? clamp((openness - .45) / .4) : clamp((openness - .7) / .25));
       panel.current.style.height = `${full.height}px`;
-      const side = Math.max(0, (full.width - width) / 2);
+      // Largura acompanha o corpo entre o painel padrão e o alvo (Início 580↔640): o grid
+      // estica junto com as bordas em vez de pular num quadro. Abrindo do compacto, fica no piso.
+      const layout = Math.max(Math.min(full.width, openBody.width), width);
+      panel.current.style.width = `${layout}px`; panel.current.style.marginLeft = `${-layout / 2}px`;
+      const side = Math.max(0, (layout - width) / 2);
       panel.current.style.clipPath = `inset(0 ${side}px ${Math.max(0, full.height - height)}px ${side}px round 0 0 ${shape.radius}px ${shape.radius}px)`;
     }
     if (compact.current) {

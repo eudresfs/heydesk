@@ -3,6 +3,10 @@ import type { ShellBridge } from "../../lib/shellBridge";
 import type { ActivityInput } from "../activity/activity";
 
 export interface SportSide { id: string; name: string; short: string; logo: string | null; score: string | null }
+/** Jogo de Major de CS2 (o nome do evento na HLTV traz "Major"): o notch veste a HUD do Major. */
+export function isMajorGame(game: Pick<SportGame, "league" | "leagueName">) {
+  return game.league === "hltv:cs2" && /\bmajor\b/i.test(game.leagueName);
+}
 export interface SportGame { id: string; league: string; leagueName: string; start: number; state: "pre" | "in" | "post"; detail: string; clock: string | null; home: SportSide; away: SportSide; followed: boolean; maps?: MapInfo[]; pinned?: boolean }
 export interface MapInfo { name: string | null; result: "home" | "away" | "done" | "live" | "pending"; homeRounds: number | null; awayRounds: number | null }
 export interface SportsSnapshot { games: SportGame[]; observedAt: number | null; errors: string[] }

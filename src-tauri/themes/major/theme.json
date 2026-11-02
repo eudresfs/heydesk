@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "name": "Major",
+  "author": "Heydesk",
+  "colors": {
+    "glow": [
+      "#f2c14e",
+      "#4f8cff",
+      "#ffe7a3"
+    ]
+  },
+  "hud": {
+    "surface": "#0b1322",
+    "text": "#f4f1e6",
+    "muted": "#c3c8d4",
+    "accent": "#f2c14e",
+    "border": "#e2b445",
+    "textureOpacity": 0.45,
+    "panelOpacity": 0.95,
+    "bevel": true,
+    "shimmer": true,
+    "lines": [
+      {
+        "color": "#f2c14e",
+        "inset": 5,
+        "width": 1.5,
+        "glow": true
+      },
+      {
+        "color": "#f4f1e6",
+        "inset": 9,
+        "width": 0.6
+      }
+    ],
+    "texture": "texture.svg",
+    "corner": "corner.svg",
+    "crest": "crest.svg",
+    "panel": "panel.svg"
+  }
+}

@@ -80,7 +80,7 @@ pub struct ThemeManifest {
 #[derive(Clone, Debug, Default, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ThemeSummary {
-    pub id: String, pub name: String, pub built_in: bool, pub has_images: bool, pub has_font: bool, pub sound_kinds: Vec<String>, pub glow: Option<[String; 3]>, pub preview: Option<String>, pub error: Option<String>,
+    pub id: String, pub name: String, pub built_in: bool, pub has_images: bool, pub has_hud: bool, pub has_font: bool, pub sound_kinds: Vec<String>, pub glow: Option<[String; 3]>, pub preview: Option<String>, pub error: Option<String>,
     /// Cor e borda do HUD, para o cartão do tema em Aparência.
     pub surface: Option<String>, pub border: Option<String>,
 }
@@ -102,13 +102,15 @@ macro_rules! built_in {
 }
 macro_rules! sprite_theme { ($id:literal) => { built_in!($id, ["calm.svg", "happy.svg", "angry.svg", "sleepy.svg", "wide.svg"]) }; }
 macro_rules! hud_theme { ($id:literal) => { built_in!($id, ["texture.svg", "corner.svg", "crest.svg", "panel.svg"]) }; }
-const BUILT_IN: [(&str, &[(&str, &[u8])]); 8] = [
+const BUILT_IN: [(&str, &[(&str, &[u8])]); 9] = [
     built_in!("eyes", []),
     sprite_theme!("geleu"), sprite_theme!("lunito"), sprite_theme!("taturi"), sprite_theme!("zunzum"),
-    hud_theme!("reliquia"), hud_theme!("arcano"), hud_theme!("neon"),
+    hud_theme!("reliquia"), hud_theme!("arcano"), hud_theme!("neon"), hud_theme!("major"),
 ];
 pub fn is_built_in(id: &str) -> bool { BUILT_IN.iter().any(|(name, _)| *name == id) }
 
+/// Embutidos que só trazem visual do notch, sem mascote.
+pub const HUD_ONLY: [&str; 3] = ["reliquia", "arcano", "neon"];
 /// Id de tema: nome de pasta curto, minúsculo, sem espaços.
 pub fn is_valid_id(id: &str) -> bool {
     let bytes = id.as_bytes();
@@ -298,7 +300,7 @@ impl Themes {
                 .and_then(|bytes| sniff(&bytes).filter(|mime| mime.starts_with("image/")).map(|mime| format!("data:{mime};base64,{}", base64_of(&bytes))))
         };
         ThemeSummary {
-            id: id.into(), name: manifest.name.trim().to_string(), built_in, has_images: manifest.images.is_some(), has_font: manifest.font.is_some(),
+            id: id.into(), name: manifest.name.trim().to_string(), built_in, has_images: manifest.images.is_some(), has_hud: manifest.hud.is_some(), has_font: manifest.font.is_some(),
             sound_kinds: manifest.sounds.keys().cloned().collect(), glow: manifest.colors.and_then(|colors| colors.glow), preview, error,
             surface: manifest.hud.as_ref().and_then(|hud| hud.surface.clone()), border: manifest.hud.as_ref().and_then(|hud| hud.border.clone()),
         }
@@ -474,7 +476,7 @@ mod tests {
         let test = TestDir::new("builtin");
         let list = Themes::new(test.0.join("themes")).list();
         let ids: Vec<&str> = list.iter().map(|theme| theme.id.as_str()).collect();
-        assert_eq!(ids, ["eyes", "geleu", "lunito", "taturi", "zunzum", "reliquia", "arcano", "neon"]);
+        assert_eq!(ids, ["eyes", "geleu", "lunito", "taturi", "zunzum", "reliquia", "arcano", "neon", "major"]);
         let relic = Themes::new(test.0.clone()).read("reliquia").unwrap();
         assert_eq!(relic.hud.len(), 4);
         assert_eq!(relic.manifest.hud.as_ref().unwrap().lines.len(), 2);

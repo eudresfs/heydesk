@@ -73,6 +73,37 @@ const styles = {
 <rect width="680" height="300" fill="url(#s)"/><g stroke="#ff3ea5" stroke-width=".8" opacity=".14" mask="url(#m)">${v}${h}</g>`);
     },
   },
+  // Final de campeonato (Major de CS2): entra sozinho durante jogo ao vivo de time seguido.
+  // Arte original: louros, estrela e holofotes; nada de marca ou logo de torneio.
+  major: {
+    name: "Major",
+    hud: { surface: "#0b1322", text: "#f4f1e6", muted: "#c3c8d4", accent: "#f2c14e", border: "#e2b445", textureOpacity: .45, panelOpacity: .95, bevel: true, shimmer: true,
+      lines: [{ color: "#f2c14e", inset: 5, width: 1.5, glow: true }, { color: "#f4f1e6", inset: 9, width: .6 }] },
+    glow: ["#f2c14e", "#4f8cff", "#ffe7a3"],
+    // Metal escovado: ruído esticado na horizontal, bem fraco.
+    texture: () => noise("#0b1322", [.3, .38, .55], { freq: ".012 .5", octaves: 2, alpha: .28, grain: .06, seed: 21 }),
+    corner: () => svg(20, 20, `<defs>${shadow}${glow("s", 1.3, "#f2c14e")}<linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff4cf"/><stop offset=".55" stop-color="#f2c14e"/><stop offset="1" stop-color="#8a6116"/></linearGradient></defs>
+<g filter="url(#s)"><polygon points="10,2 12.1,7.6 18,7.8 13.4,11.5 15,17.3 10,13.9 5,17.3 6.6,11.5 2,7.8 7.9,7.6" fill="url(#au)" stroke="#5a3d0c" stroke-width=".5"/><circle cx="8.6" cy="7.4" r=".9" fill="#fff" opacity=".85"/></g>`),
+    crest() {
+      const gold = `<linearGradient id="au" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff4cf"/><stop offset=".5" stop-color="#f2c14e"/><stop offset="1" stop-color="#8a6116"/></linearGradient>`;
+      // Meio ramo de louro: folhas em arco subindo para o centro.
+      const leaves = Array.from({ length: 6 }, (_, i) => { const t = i / 5, x = 30 + t * 26, y = 22 - Math.sin(t * Math.PI * .55) * 12, a = -40 + t * 55;
+        return `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="4.2" ry="1.9" transform="rotate(${a.toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`; }).join("");
+      const branch = `<path d="M28 24Q44 20 57 10" stroke="#8a6116" stroke-width="1" fill="none"/><g fill="url(#au)">${leaves}</g>`;
+      return svg(140, 32, `<defs>${gold}${shadow}${glow("g", 2, "#f2c14e")}</defs>
+<g filter="url(#sh)">${branch}<g transform="matrix(-1 0 0 1 140 0)">${branch}</g>
+<circle cx="70" cy="15" r="11" fill="#0b1322" stroke="url(#au)" stroke-width="1.6"/></g>
+<polygon points="70,6.5 72.6,12.4 79,12.8 74.1,16.9 75.7,23.2 70,19.6 64.3,23.2 65.9,16.9 61,12.8 67.4,12.4" fill="url(#au)" filter="url(#g)"/>`);
+    },
+    panel: () => {
+      const beams = [-1, 1].map(side => `<path d="M${340 + side * 150} -20L${340 + side * 40} 300L${340 + side * 250} 300Z" fill="url(#beam)"/>`).join("");
+      const confetti = Array.from({ length: 34 }, (_, i) => { const x = (i * 97.3) % 680, y = (i * 43.1) % 300, c = ["#f2c14e", "#4f8cff", "#f4f1e6"][i % 3];
+        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="3" height="1.4" fill="${c}" opacity="${(.18 + (i % 4) * .07).toFixed(2)}" transform="rotate(${(i * 37) % 180} ${x.toFixed(1)} ${y.toFixed(1)})"/>`; }).join("");
+      return svg(680, 300, `<defs><radialGradient id="a" cx="340" cy="-30" r="380" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2b4a8a" stop-opacity=".8"/><stop offset=".5" stop-color="#132240" stop-opacity=".35"/><stop offset="1" stop-color="#0b1322" stop-opacity="0"/></radialGradient>
+<linearGradient id="beam" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe7a3" stop-opacity=".16"/><stop offset="1" stop-color="#ffe7a3" stop-opacity="0"/></linearGradient></defs>
+<rect width="680" height="300" fill="url(#a)"/>${beams}${confetti}`);
+    },
+  },
 };
 
 const root = join(import.meta.dirname, "..", "src-tauri", "themes");

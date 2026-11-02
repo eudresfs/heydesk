@@ -6,7 +6,7 @@ import type { CalendarsControl } from "../context/useCalendars";
 import type { SportsControl, TeamOption } from "../sports/useSports";
 import type { useSettings } from "../../hooks/useSettings";
 import { defaultMascot, defaultSounds, type MascotSettings, type SoundSettings, type ThemeSummary } from "../../lib/shellBridge";
-import { forgetTheme, moodImage, useTheme, type ActiveTheme } from "../theme/useTheme";
+import { forgetTheme, moodImage, useThemes, type ActiveTheme } from "../theme/useTheme";
 import { noteLine, useUpdate } from "../update/useUpdate";
 
 const noBridge = { desktop: false } as ShellBridge;
@@ -52,8 +52,9 @@ function Preview({ settings, label, theme }: { settings: Settings; label: string
 
 const accents = ["#E5E5E5", "#0A84FF", "#30D158", "#00EB46", "#FFD60A", "#FF9F0A", "#FF453A", "#BF5AF2", "#FF375F"];
 
-/** Temas do mascote: embutidos e importados. Importar = escolher uma pasta com `theme.json`. */
-function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: string; onPick(id: string): void }) {
+/** Mascote e visual do notch são escolhas separadas, de pacotes embutidos ou importados.
+ *  Importar = escolher uma pasta com `theme.json`; o pacote aparece onde tiver conteúdo (imagens, HUD ou os dois). */
+function ThemeGroup({ bridge, mascot, hud, onPick }: { bridge?: ShellBridge; mascot: string; hud: string; onPick(patch: Partial<MascotSettings>): void }) {
   const [themes, setThemes] = useState<ThemeSummary[]>([]);
   const [status, setStatus] = useState<{ busy?: boolean; error?: string; note?: string }>({});
   const [confirm, setConfirm] = useState<string | null>(null);
@@ -68,8 +69,11 @@ function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: st
     try {
       const id = await bridge.themeImport(files, folder);
       forgetTheme(id);
-      refresh();
-      onPick(id);
+      const next = await bridge.themeList?.() ?? [];
+      setThemes(next);
+      // Vai para onde o pacote tem conteúdo: mascote, notch ou os dois.
+      const added = next.find(theme => theme.id === id);
+      onPick({ ...(added?.hasImages ? { theme: id } : {}), ...(added?.hasHud ? { hud: id } : {}) });
       setStatus({ note: "Tema importado. Salve para aplicar no notch." });
     } catch (reason) { setStatus({ error: typeof reason === "string" ? reason : "Não foi possível importar o tema." }); }
   };
@@ -77,23 +81,34 @@ function ThemeGroup({ bridge, value, onPick }: { bridge?: ShellBridge; value: st
     setConfirm(null);
     try {
       await bridge.themeRemove?.(id); forgetTheme(id); refresh();
-      if (value === id) { onPick("eyes"); setStatus({ note: "Tema removido. Salve para voltar aos olhos padrão." }); }
+      const patch: Partial<MascotSettings> = { ...(mascot === id ? { theme: "eyes" } : {}), ...(hud === id ? { hud: "none" } : {}) };
+      if (Object.keys(patch).length) { onPick(patch); setStatus({ note: "Tema removido. Salve para voltar ao padrão." }); }
     }
     catch (reason) { setStatus({ error: typeof reason === "string" ? reason : "Não foi possível remover o tema." }); }
   };
-  const user = themes.find(theme => theme.id === value && !theme.builtIn);
+  const user = themes.find(theme => (theme.id === mascot || theme.id === hud) && !theme.builtIn);
   const broken = themes.filter(theme => theme.error);
+  const mascots = themes.filter(theme => theme.id === "eyes" || theme.hasImages || (theme.error && !theme.builtIn));
+  const huds = themes.filter(theme => theme.hasHud);
   return <Group title="Tema">
-    <Row title="Mascote do tema" desc="Os olhos padrão, um dos mascotes do Heydesk ou um pacote que você importou." wide>
-      <span className="set-options">{themes.map(theme => <button key={theme.id} type="button" className="set-option set-theme" aria-pressed={value === theme.id} disabled={Boolean(theme.error)} title={theme.error ?? theme.name} onClick={() => onPick(theme.id)}
-        data-hud={theme.surface && !theme.hasImages ? "" : undefined} style={theme.surface && !theme.hasImages ? { ["--theme-card" as string]: theme.surface, ["--theme-card-edge" as string]: theme.border ?? "transparent" } : undefined}>
-        {theme.surface && !theme.hasImages && theme.preview ? <img className="set-theme-crest" src={theme.preview} alt="" />
-          : <Mascot size="large" expression="normal" active={false} reducedMotion image={theme.preview ?? undefined} />}
+    <Row title="Mascote" desc="Os olhos padrão, um dos mascotes do Heydesk ou um pacote que você importou." wide>
+      <span className="set-options">{mascots.map(theme => <button key={theme.id} type="button" className="set-option set-theme" aria-pressed={mascot === theme.id} disabled={Boolean(theme.error)} title={theme.error ?? theme.name} onClick={() => onPick({ theme: theme.id })}>
+        <Mascot size="large" expression="normal" active={false} reducedMotion image={theme.hasImages ? theme.preview ?? undefined : undefined} />
         <span>{theme.name}</span>
       </button>)}</span>
       {broken.length > 0 && <span className="set-desc set-theme-errors" role="status">{broken.map(theme => <span key={theme.id}><b>{theme.name}</b>: {theme.error}</span>)}</span>}
     </Row>
-    <Row title="Importar tema" desc={status.error ? <span role="alert">{status.error}</span> : status.note ?? <>Escolha uma pasta com <code>theme.json</code> e as imagens do mascote (PNG ou SVG). Pastas em <code>%APPDATA%\dev.heydesk.app\themes</code> também aparecem.</>}>
+    <Row title="Visual do notch" desc="Cores, moldura e ornamentos do notch. Combina com qualquer mascote." wide>
+      <span className="set-options">
+        <button type="button" className="set-option set-theme" data-hud="" aria-pressed={hud === "none"} onClick={() => onPick({ hud: "none" })} style={{ ["--theme-card" as string]: "#000", ["--theme-card-edge" as string]: "transparent" }}><i className="set-theme-crest" aria-hidden="true" /><span>Padrão</span></button>
+        {huds.map(theme => <button key={theme.id} type="button" className="set-option set-theme" data-hud="" aria-pressed={hud === theme.id} disabled={Boolean(theme.error)} title={theme.error ?? theme.name} onClick={() => onPick({ hud: theme.id })}
+          style={{ ["--theme-card" as string]: theme.surface ?? "#000", ["--theme-card-edge" as string]: theme.border ?? "transparent" }}>
+          {!theme.hasImages && theme.preview && <img className="set-theme-crest" src={theme.preview} alt="" />}
+          <span>{theme.name}</span>
+        </button>)}
+      </span>
+    </Row>
+    <Row title="Importar tema" desc={status.error ? <span role="alert">{status.error}</span> : status.note ?? <>Escolha uma pasta com <code>theme.json</code> com as imagens do mascote (PNG ou SVG), o visual do notch ou os dois. Pastas em <code>%APPDATA%\dev.heydesk.app\themes</code> também aparecem.</>}>
       <span className="set-actions">
         {/* Input visualmente escondido mas focável: Tab chega nele e Enter/Espaço abre o seletor. */}
         <label className="set-button set-file" aria-disabled={status.busy || undefined}>{status.busy ? "Importando…" : "Importar pasta"}
@@ -151,13 +166,13 @@ export function AppearanceSection({ settings, bridge }: { settings: Settings; br
   const mascot = { ...defaultMascot, ...settings.draft.mascot };
   const set = (patch: Partial<typeof appearance>) => settings.edit({ ...settings.draft, appearance: { ...appearance, ...patch } });
   const setMascot = (patch: Partial<MascotSettings>) => settings.edit({ ...settings.draft, mascot: { ...mascot, ...patch } });
-  const theme = useTheme(bridge ?? noBridge, mascot.theme);
+  const theme = useThemes(bridge ?? noBridge, mascot.theme, mascot.hud);
   const themed = Boolean(theme.images);
   // Tema com HUD define brilho e destaque: os controles ficam desligados, com aviso.
   const hudOwns = Boolean(theme.hud);
   return <>
     <Preview settings={settings} label="Prévia do notch" theme={theme} />
-    <ThemeGroup bridge={bridge} value={mascot.theme ?? "eyes"} onPick={id => setMascot({ theme: id })} />
+    <ThemeGroup bridge={bridge} mascot={mascot.theme ?? "eyes"} hud={mascot.hud ?? "none"} onPick={setMascot} />
     <Group title="Ilha">
       {hudOwns && <p className="set-desc set-note">O tema escolhido define a cor de destaque e o brilho do notch.</p>}
       <Row title="Opacidade do notch fechado" desc="Quanto do fundo aparece através da ilha compacta. Aplicado ao salvar."><Slider value={appearance.opacity} min={30} max={100} label="Opacidade do notch fechado" onChange={opacity => set({ opacity })} /></Row>

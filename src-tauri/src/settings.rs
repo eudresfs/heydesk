@@ -44,13 +44,15 @@ pub struct MascotSettings {
     pub pace: String,
     /// Mascote também no painel aberto (desligado: só no notch fechado).
     pub in_panel: bool,
-    /// Pacote de tema; "eyes" = os olhos vetoriais.
+    /// Pacote do mascote; "eyes" = os olhos vetoriais.
     pub theme: String,
+    /// Pacote do visual do notch (HUD), independente do mascote; "none" = notch padrão.
+    pub hud: String,
 }
 impl Default for MascotSettings {
     fn default() -> Self {
         Self { eye_shape: "oval".into(), eye_color: "#FFFFFF".into(), glow: "aurora".into(), glow_color: "#2D5BFF".into(),
-            blink: true, look: true, reactions: true, bounce: true, pace: "calm".into(), in_panel: true, theme: "eyes".into() }
+            blink: true, look: true, reactions: true, bounce: true, pace: "calm".into(), in_panel: true, theme: "eyes".into(), hud: "none".into() }
     }
 }
 
@@ -196,7 +198,7 @@ impl AppSettings {
         }
         let mascot = &self.mascot;
         if !["oval", "round", "pixel", "line", "heart"].contains(&mascot.eye_shape.as_str()) || !["aurora", "amber", "mint", "rose", "mono", "custom"].contains(&mascot.glow.as_str())
-            || !["calm", "lively"].contains(&mascot.pace.as_str()) || !is_hex(&mascot.eye_color) || !is_hex(&mascot.glow_color) || !crate::themes::is_valid_id(&mascot.theme) {
+            || !["calm", "lively"].contains(&mascot.pace.as_str()) || !is_hex(&mascot.eye_color) || !is_hex(&mascot.glow_color) || !crate::themes::is_valid_id(&mascot.theme) || !crate::themes::is_valid_id(&mascot.hud) {
             return Err("Opções do mascote inválidas.".into());
         }
         if self.hidden_pages.len() > 20 || self.hidden_pages.iter().any(|page| page.is_empty() || page.len() > 20 || !page.chars().all(|c| c.is_ascii_alphanumeric())) {
@@ -233,7 +235,7 @@ impl SettingsStore {
         let mut loaded = self.loaded.lock().map_err(|_| "O estado das configurações está indisponível.")?;
         *loaded = false;
         let settings = match fs::read(&self.path) {
-            Ok(bytes) => decode_settings(&bytes)?,
+            Ok(bytes) => { let mut settings = decode_settings(&bytes)?; split_hud(&mut settings.mascot); settings }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => AppSettings::default(),
             Err(error) => return Err(format!("Não foi possível ler as configurações: {error}")),
         };
@@ -269,6 +271,14 @@ pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     })();
     if result.is_err() { let _ = fs::remove_file(&staging); }
     result
+}
+
+/// Até a 0.6 o mascote e o notch eram um tema só. Quem escolheu um tema embutido só de
+/// HUD (Relíquia, Arcano, Neon) fica com os olhos no mascote e o tema no notch.
+fn split_hud(mascot: &mut MascotSettings) {
+    if mascot.hud == "none" && crate::themes::HUD_ONLY.contains(&mascot.theme.as_str()) {
+        mascot.hud = std::mem::replace(&mut mascot.theme, "eyes".into());
+    }
 }
 
 #[cfg(test)]
@@ -307,7 +317,7 @@ mod tests {
             "motion": { "reducedMotion": "system" },
             "modules": { "codexUsage": true, "claudeUsage": true, "hideInFullscreen": true, "notifications": false, "systemInfo": true, "media": true, "weather": false },
             "weatherLocation": null,
-            "mascot": { "eyeShape": "oval", "eyeColor": "#FFFFFF", "glow": "aurora", "glowColor": "#2D5BFF", "blink": true, "look": true, "reactions": true, "bounce": true, "pace": "calm", "inPanel": true, "theme": "eyes" },
+            "mascot": { "eyeShape": "oval", "eyeColor": "#FFFFFF", "glow": "aurora", "glowColor": "#2D5BFF", "blink": true, "look": true, "reactions": true, "bounce": true, "pace": "calm", "inPanel": true, "theme": "eyes", "hud": "none" },
             "sounds": { "enabled": true, "volume": 55, "pack": "soft", "notifications": true, "reminders": true, "sports": true, "interactions": false, "respectDnd": true },
             "hiddenPages": [],
             "pageOrder": []
@@ -527,5 +537,15 @@ mod tests {
         drop(guard);
         assert_eq!(std::fs::read(&path).unwrap(), previous);
         assert_eq!(std::fs::read_dir(&directory.0).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn hud_only_theme_moves_to_the_notch() {
+        let mut old = MascotSettings { theme: "reliquia".into(), ..Default::default() };
+        split_hud(&mut old);
+        assert_eq!((old.theme.as_str(), old.hud.as_str()), ("eyes", "reliquia"));
+        let mut both = MascotSettings { theme: "geleu".into(), hud: "neon".into(), ..Default::default() };
+        split_hud(&mut both);
+        assert_eq!((both.theme.as_str(), both.hud.as_str()), ("geleu", "neon"));
     }
 }

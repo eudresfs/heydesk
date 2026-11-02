@@ -109,7 +109,7 @@ h1:focus, .panel:focus { outline: none; }
 [data-toast] .mascot-ambient { opacity: 0; }
 .toast { position: absolute; inset: 0; z-index: 3; display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 0 18px 0 16px; text-align: left; animation: toast-in 250ms var(--ease-out) both; }
 @keyframes toast-in { from { opacity: 0; filter: blur(4px); transform: translateY(-6px) scale(.98); } }
-.toast[data-leaving] { pointer-events: none; animation: toast-out 160ms var(--ease-exit) forwards; }
+.toast[data-leaving], .water-card[data-leaving] { pointer-events: none; animation: toast-out 160ms var(--ease-exit) forwards; }
 @keyframes toast-out { to { opacity: 0; transform: translateY(-4px) scale(.98); } }
 .toast-icon { position: relative; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: var(--surface-2); color: var(--text); }
 .toast-icon svg { width: 17px; height: 17px; }

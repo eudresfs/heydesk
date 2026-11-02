@@ -4,8 +4,8 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Window } from "happy-dom";
 import { Mascot, type MascotExpression } from "../src/modules/context/Mascot";
-import { hudStyle, moodImage, themeWater } from "../src/modules/theme/useTheme";
-import { scoreLabel } from "../src/modules/sports/useSports";
+import { combineThemes, emptyTheme, hudStyle, moodImage, themeWater } from "../src/modules/theme/useTheme";
+import { isMajorGame, scoreLabel } from "../src/modules/sports/useSports";
 import { playSound } from "../src/modules/sound/sounds";
 import { noteLine } from "../src/modules/update/useUpdate";
 
@@ -104,4 +104,25 @@ test("som do tema toca o arquivo no lugar da melodia", () => {
   made.length = 0;
   playSound("goal", "soft", 50);
   assert.ok(made.includes("osc") && !made.includes("buffer"));
+});
+
+test("mascote de um pacote e visual do notch de outro", () => {
+  const geleu = { ...emptyTheme, id: "geleu", images: { calm: "data:image/svg+xml,a" }, pixelated: true, glow: ["#1", "#2", "#3"] as [string, string, string], copy: { water: ["glub"] } };
+  const reliquia = { ...emptyTheme, id: "reliquia", glow: ["#a", "#b", "#c"] as [string, string, string], hud: { surface: "#16120d", frameSlice: 16, textureOpacity: .5, bevel: true, shimmer: true, panelOpacity: .9, lines: [] } };
+  const both = combineThemes(geleu, reliquia);
+  assert.equal(both.images?.calm, "data:image/svg+xml,a");
+  assert.deepEqual(both.copy, { water: ["glub"] });
+  assert.equal(both.hud?.surface, "#16120d");
+  assert.deepEqual(both.glow, ["#a", "#b", "#c"], "o brilho segue o notch quando há HUD");
+  const plain = combineThemes(geleu, emptyTheme);
+  assert.equal(plain.hud, undefined);
+  assert.deepEqual(plain.glow, ["#1", "#2", "#3"]);
+});
+
+test("Major de CS2 pelo nome do evento", () => {
+  assert.ok(isMajorGame({ league: "hltv:cs2", leagueName: "IEM Cologne Major 2026 · Playoffs" }));
+  assert.ok(isMajorGame({ league: "hltv:cs2", leagueName: "PGL Major Copenhagen" }));
+  assert.ok(!isMajorGame({ league: "hltv:cs2", leagueName: "Stake Ranked · Final" }));
+  assert.ok(!isMajorGame({ league: "hltv:cs2", leagueName: "Majorca Cup" }), "palavra inteira");
+  assert.ok(!isMajorGame({ league: "soccer/bra.1", leagueName: "Major League" }), "só CS2");
 });

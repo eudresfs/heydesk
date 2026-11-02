@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { cloneElement, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactElement } from "react";
 import { createShellBridge, type ShellBridge } from "./lib/shellBridge";
 import { useIsland } from "./hooks/useIsland";
 import { useSettings } from "./hooks/useSettings";
@@ -20,7 +20,7 @@ import { useMascotTouch } from "./modules/context/useMascotTouch";
 import { defaultReminders, dueReminders, useNotes } from "./modules/context/useNotes";
 import { waterCopy, waterPlan } from "./modules/context/waterPlan";
 import { useAsk } from "./modules/context/useAsk";
-import { useSports, bestStream, csMapScore, csSide, sportsResults } from "./modules/sports/useSports";
+import { useSports, bestStream, csMapScore, csSide, sportsResults, isMajorGame } from "./modules/sports/useSports";
 import { useStoredFlag } from "./lib/storedFlag";
 import { useCalendars } from "./modules/context/useCalendars";
 import { fileSize, useShelf } from "./modules/context/useShelf";
@@ -31,13 +31,16 @@ import { useMascotGaze } from "./modules/context/useMascotGaze";
 import { THANKS_MS, WaterThanks } from "./modules/context/WaterThanks";
 import { glowPresets } from "./modules/context/ContextPages";
 import { defaultMascot, defaultSounds } from "./lib/shellBridge";
-import { hudStyle, moodImage, themeWater, useTheme } from "./modules/theme/useTheme";
+import { hudStyle, moodImage, themeWater, useThemes } from "./modules/theme/useTheme";
 import { playSound, soundCategory, type SoundKind } from "./modules/sound/sounds";
 import type { BodySize } from "./modules/motion/spring";
 
 // O rolo vertical do painel aberto. Hora e clima ficam só no compacto.
 const tallAsk = { width: 580, height: 380 } as const;
 /** Início tem tamanho próprio, mais largo e alto (como o OmniNotch). */
+declare const __HEYDESK_DEBUG__: boolean | undefined;
+/** Ganchos de prévia para testar no webview: só em dev e no build de debug (fora dos testes, sem define). */
+const debugHooks = typeof __HEYDESK_DEBUG__ !== "undefined" && __HEYDESK_DEBUG__;
 export const homeSize = { width: 640, height: 280 } as const;
 /** Teleprompter: mais alto, para várias linhas abaixo da câmera. */
 const prompterSize = { width: 600, height: 300 } as const;
@@ -215,7 +218,10 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     void bridge.configureNotifications(Boolean(settings.saved.modules.notifications), ["WhatsApp"]).then(setNotificationStatus).catch(() => setNotificationStatus("unsupported"));
   }, [bridge, settings.loadState, settings.saved.modules.notifications]);
   // Tema do mascote (imagens, fonte, sons, cores, textos): o salvo, para o notch não mudar no rascunho.
-  const theme = useTheme(bridge, { ...defaultMascot, ...settings.saved.mascot }.theme);
+  const savedMascot = { ...defaultMascot, ...settings.saved.mascot };
+  // Jogo de Major ao vivo de time seguido: a HUD do Major substitui o visual escolhido enquanto dura.
+  const majorLive = Boolean(sports.snapshot?.games.some(game => game.state === "in" && game.followed && isMajorGame(game)));
+  const theme = useThemes(bridge, savedMascot.theme, majorLive ? "major" : savedMascot.hud);
   // Variáveis do HUD (podem trazer data: URLs grandes): recalcula só quando o tema muda.
   const hudVars = useMemo(() => hudStyle(theme.hud), [theme.hud]);
   const activity = useActivity(context.desktop.failed ? null : desktop ?? null, activityEnabled, sports.snapshot, sports.config?.teams ?? [], waterNudge, pushed.pending, theme.copy?.mapFor);
@@ -248,15 +254,15 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const waterShow = waterPending && !activity && !island.hidden;
   // Versão nova: aviso com "Atualizar" / "Depois" no notch fechado (a água tem prioridade).
   const updateShow = Boolean(updateInfo) && !waterShow && !activity && !island.hidden;
-  useEffect(() => { (window as unknown as { heydeskPreviewUpdate?: (version?: string) => void }).heydeskPreviewUpdate = (version = "9.9.9") => update.preview({ current: "0.5.0", version, notes: "Prévia do aviso de atualização." }); }, [update.preview]);
+  useEffect(() => { if (!debugHooks) return; (window as unknown as { heydeskPreviewUpdate?: (version?: string) => void }).heydeskPreviewUpdate = (version = "9.9.9") => update.preview({ current: "0.5.0", version, notes: "Prévia do aviso de atualização." }); }, [update.preview]);
   // Bebeu depois de um lembrete: o mascote se acalma e agradece por alguns segundos.
   const [waterThanks, setWaterThanks] = useState<{ level: number; key: number } | null>(null);
   useEffect(() => { if (!waterThanks) return; const timer = window.setTimeout(() => setWaterThanks(null), THANKS_MS); return () => window.clearTimeout(timer); }, [waterThanks]);
   const thanksShow = Boolean(waterThanks) && !island.hidden && !island.expanded;
   // Prévia do alívio para conferir o visual sem registrar gole (chamada pelo console de depuração).
-  useEffect(() => { (window as unknown as { heydeskPreviewThanks?: (level?: number) => void }).heydeskPreviewThanks = (level = 2) => setWaterThanks({ level, key: Date.now() }); }, []);
+  useEffect(() => { if (!debugHooks) return; (window as unknown as { heydeskPreviewThanks?: (level?: number) => void }).heydeskPreviewThanks = (level = 2) => setWaterThanks({ level, key: Date.now() }); }, []);
   // Abre o painel sem passar o mouse (conferir temas e HUD pelo console de depuração).
-  useEffect(() => { (window as unknown as { heydeskPreviewOpen?: (open?: boolean) => void }).heydeskPreviewOpen = (open = true) => island.change(open, open); }, [island.change]);
+  useEffect(() => { if (!debugHooks) return; (window as unknown as { heydeskPreviewOpen?: (open?: boolean) => void }).heydeskPreviewOpen = (open = true) => island.change(open, open); }, [island.change]);
   const waterPulse = waterShow ? Math.floor(waterTick / 300_000) : 0;
   useEffect(() => { if (waterShow) play("reminder"); }, [waterShow, waterPulse]); // eslint-disable-line react-hooks/exhaustive-deps
   const openedOnce = useRef(false);
@@ -436,7 +442,43 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const feedback = !bridge.desktop ? "Salvar no aplicativo desktop." : settings.loadState === "loading" ? "Carregando…" : settings.loadState === "error" ? "Falha ao carregar." : settings.saveState === "error" ? "Falha ao salvar. Rascunho preservado." : settings.saveState === "saving" ? "Salvando…" : settings.saveState === "saved" ? "Configurações salvas." : settings.dirty ? "Alterações não salvas." : "";
   const pageIndex = contextPages.indexOf(page);
 
-  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
+  // Lembrete de água ou aviso de atualização no compacto.
+  const card = (!thanksShow && waterShow && !toast && !countShow && !island.expanded && waterNow?.due && (copy => <div className="water-card" key={`wc-${waterPulse}-${waterNow.due}-${waterLevel}`} role="alertdialog" aria-label={copy.title} data-level={waterLevel} data-kind={waterNow.due}>
+      <span className="water-card-face"><Mascot expression={waterMood} {...themed(waterMood)} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={waterAngry ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
+      <span className="toast-text"><b>{copy.title}</b><span>{copy.sub}</span></span>
+      <span className="water-card-actions">
+        <button type="button" className="water-no" onClick={notes.refuseWater}>{copy.no}</button>
+        <button type="button" className="water-yes" onClick={() => { if (waterNow.due === "refill") { notes.refillWater(); return; } notes.drink(); setWaterThanks({ level: waterLevel, key: Date.now() }); }}>{copy.yes}</button>
+      </span>
+    </div>)(themeWater(waterCopy(waterNow, notes.water, waterTick), waterNow.level, theme.copy?.water))) || (updateShow && updateInfo && !thanksShow && !toast && !countShow && !island.expanded && <div className="water-card update-card" role="status" aria-live="polite" aria-label={update.state.kind === "installing" ? "Baixando atualização" : update.state.kind === "error" ? "Atualização falhou" : `Versão ${updateInfo.version} disponível`} data-kind="update" data-error={update.state.kind === "error" || undefined}>
+      <span className="water-card-face"><Mascot expression={update.state.kind === "installing" ? "wide" : "happy"} {...themed(update.state.kind === "installing" ? "wide" : "happy")} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
+      <span className="toast-text">
+        <b>{update.state.kind === "installing" ? `Atualizando para ${updateInfo.version}…` : update.state.kind === "error" ? "Não deu para atualizar" : `Heydesk ${updateInfo.version} disponível`}</b>
+        <span>{update.state.kind === "installing" ? (update.state.percent ? `Baixando: ${update.state.percent}%. O Heydesk reabre sozinho.` : "Preparando o download…") : update.state.kind === "error" ? update.state.message : noteLine(updateInfo.notes) || `Você usa a versão ${updateInfo.current}.`}</span>
+      </span>
+      <span className="water-card-actions">
+        {update.state.kind === "installing" ? <><span className="update-progress" role="progressbar" aria-label="Progresso do download" aria-valuenow={update.state.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ transform: `scaleX(${update.state.percent / 100})` }} /></span>
+            <button type="button" className="water-no" onClick={update.dismiss}>Ocultar</button></>
+          : <><button type="button" className="water-no" onClick={update.dismiss}>Depois</button>
+            <button type="button" className="water-yes" onClick={() => void update.install()}>{update.state.kind === "error" ? "Tentar de novo" : "Atualizar"}</button></>}
+      </span>
+    </div>) || null;
+  // Fechou sem outro aviso no lugar (Depois, Agora não): o cartão sai em 160 ms enquanto a
+  // pílula encolhe, em vez de sumir num quadro. Agradecimento, toast ou painel aberto assumem na hora.
+  const [leavingCard, setLeavingCard] = useState<ReactElement | null>(null);
+  const lastCard = useRef<ReactElement | null>(null);
+  const cardKey = card ? `${card.props["data-kind"]}:${card.key}` : "";
+  useEffect(() => {
+    const gone = lastCard.current;
+    if (card) { lastCard.current = card; setLeavingCard(null); return; }
+    lastCard.current = null;
+    if (!gone || thanksShow || toast || countShow || reducedMotion || island.expanded || island.hidden) { setLeavingCard(null); return; }
+    setLeavingCard(cloneElement(gone, { "data-leaving": "", "aria-hidden": true, role: undefined }));
+    const timer = window.setTimeout(() => setLeavingCard(null), 160);
+    return () => window.clearTimeout(timer);
+  }, [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (card) lastCard.current = card;
+  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow || leavingCard)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
     onMouseMove={island.pointerMove} onMouseLeave={island.pointerLeave}
     onBlurCapture={event => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
@@ -564,26 +606,6 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     </button>
     {/* Lembrete de água com botões (fora do botão do compacto: botão dentro de botão não vale). */}
     {thanksShow && waterThanks && !toast && !countShow && <WaterThanks key={waterThanks.key} level={waterThanks.level} images={theme.images} pixelated={theme.pixelated} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} reducedMotion={reducedMotion} />}
-    {!thanksShow && waterShow && !toast && !countShow && !island.expanded && waterNow?.due && (copy => <div className="water-card" key={`wc-${waterPulse}-${waterNow.due}-${waterLevel}`} role="alertdialog" aria-label={copy.title} data-level={waterLevel} data-kind={waterNow.due}>
-      <span className="water-card-face"><Mascot expression={waterMood} {...themed(waterMood)} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={waterAngry ? "#ff453a" : mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
-      <span className="toast-text"><b>{copy.title}</b><span>{copy.sub}</span></span>
-      <span className="water-card-actions">
-        <button type="button" className="water-no" onClick={notes.refuseWater}>{copy.no}</button>
-        <button type="button" className="water-yes" onClick={() => { if (waterNow.due === "refill") { notes.refillWater(); return; } notes.drink(); setWaterThanks({ level: waterLevel, key: Date.now() }); }}>{copy.yes}</button>
-      </span>
-    </div>)(themeWater(waterCopy(waterNow, notes.water, waterTick), waterNow.level, theme.copy?.water))}
-    {updateShow && updateInfo && !thanksShow && !toast && !countShow && !island.expanded && <div className="water-card update-card" role="status" aria-live="polite" aria-label={update.state.kind === "installing" ? "Baixando atualização" : update.state.kind === "error" ? "Atualização falhou" : `Versão ${updateInfo.version} disponível`} data-kind="update" data-error={update.state.kind === "error" || undefined}>
-      <span className="water-card-face"><Mascot expression={update.state.kind === "installing" ? "wide" : "happy"} {...themed(update.state.kind === "installing" ? "wide" : "happy")} active reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace="lively" /></span>
-      <span className="toast-text">
-        <b>{update.state.kind === "installing" ? `Atualizando para ${updateInfo.version}…` : update.state.kind === "error" ? "Não deu para atualizar" : `Heydesk ${updateInfo.version} disponível`}</b>
-        <span>{update.state.kind === "installing" ? (update.state.percent ? `Baixando: ${update.state.percent}%. O Heydesk reabre sozinho.` : "Preparando o download…") : update.state.kind === "error" ? update.state.message : noteLine(updateInfo.notes) || `Você usa a versão ${updateInfo.current}.`}</span>
-      </span>
-      <span className="water-card-actions">
-        {update.state.kind === "installing" ? <><span className="update-progress" role="progressbar" aria-label="Progresso do download" aria-valuenow={update.state.percent} aria-valuemin={0} aria-valuemax={100}><i style={{ transform: `scaleX(${update.state.percent / 100})` }} /></span>
-            <button type="button" className="water-no" onClick={update.dismiss}>Ocultar</button></>
-          : <><button type="button" className="water-no" onClick={update.dismiss}>Depois</button>
-            <button type="button" className="water-yes" onClick={() => void update.install()}>{update.state.kind === "error" ? "Tentar de novo" : "Atualizar"}</button></>}
-      </span>
-    </div>}
+    {card ?? leavingCard}
   <Tooltips /></main>;
 }

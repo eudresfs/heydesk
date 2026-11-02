@@ -16,9 +16,9 @@ export interface AppSettings {
   pageOrder?: string[];
   sounds?: SoundSettings;
 }
-export interface MascotSettings { eyeShape: "oval" | "round" | "pixel" | "line" | "heart"; eyeColor: string; glow: "aurora" | "amber" | "mint" | "rose" | "mono" | "custom"; glowColor: string; blink: boolean; look: boolean; reactions: boolean; bounce: boolean; pace: "calm" | "lively"; inPanel?: boolean; theme?: string }
+export interface MascotSettings { eyeShape: "oval" | "round" | "pixel" | "line" | "heart"; eyeColor: string; glow: "aurora" | "amber" | "mint" | "rose" | "mono" | "custom"; glowColor: string; blink: boolean; look: boolean; reactions: boolean; bounce: boolean; pace: "calm" | "lively"; inPanel?: boolean; theme?: string; hud?: string }
 export interface SoundSettings { enabled: boolean; volume: number; pack: "soft" | "retro" | "minimal"; notifications: boolean; reminders: boolean; sports: boolean; interactions: boolean; respectDnd: boolean }
-export const defaultMascot: MascotSettings = { eyeShape: "oval", eyeColor: "#FFFFFF", glow: "aurora", glowColor: "#2D5BFF", blink: true, look: true, reactions: true, bounce: true, pace: "calm", inPanel: true, theme: "eyes" };
+export const defaultMascot: MascotSettings = { eyeShape: "oval", eyeColor: "#FFFFFF", glow: "aurora", glowColor: "#2D5BFF", blink: true, look: true, reactions: true, bounce: true, pace: "calm", inPanel: true, theme: "eyes", hud: "none" };
 export const defaultSounds: SoundSettings = { enabled: true, volume: 55, pack: "soft", notifications: true, reminders: true, sports: true, interactions: false, respectDnd: true };
 
 export const defaultSettings: AppSettings = {
@@ -42,7 +42,7 @@ export interface ThemeManifest {
     texture?: string | null; textureOpacity?: number | null; corner?: string | null; crest?: string | null; bevel?: boolean | null; shimmer?: boolean | null; panelOpacity?: number | null;
     lines?: { color: string; inset: number; width: number; glow?: boolean }[] } | null;
 }
-export interface ThemeSummary { id: string; name: string; builtIn: boolean; hasImages: boolean; hasFont: boolean; soundKinds: string[]; glow: [string, string, string] | null; preview: string | null; error: string | null; surface?: string | null; border?: string | null }
+export interface ThemeSummary { id: string; name: string; builtIn: boolean; hasImages: boolean; hasHud?: boolean; hasFont: boolean; soundKinds: string[]; glow: [string, string, string] | null; preview: string | null; error: string | null; surface?: string | null; border?: string | null }
 export interface ThemeBlob { mime: string; base64: string }
 export interface ThemeBundle { id: string; name: string; builtIn: boolean; manifest: ThemeManifest; images: Partial<Record<ThemeMood, string>>; font: ThemeBlob | null; sounds: Record<string, ThemeBlob>; hud?: Partial<Record<"frame" | "panel" | "texture" | "corner" | "crest", string>> }
 

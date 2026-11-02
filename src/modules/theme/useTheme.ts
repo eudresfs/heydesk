@@ -1,6 +1,6 @@
 // Tema ativo do mascote: imagens por humor, fonte, sons, cores e textos de um pacote
 // (embutido ou importado). "eyes" é o padrão e não carrega nada: ficam os olhos vetoriais.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ShellBridge, ThemeBundle, ThemeMood } from "../../lib/shellBridge";
 import type { MascotExpression } from "../context/Mascot";
 import { audioContext, type SoundKind } from "../sound/sounds";
@@ -116,7 +116,7 @@ export function useTheme(bridge: ShellBridge, id: string | undefined) {
     return () => { alive = false; stop?.(); };
   }, [bridge]);
   useEffect(() => {
-    if (!id || id === "eyes" || !bridge.themeRead) { setTheme(emptyTheme); return; }
+    if (!id || id === "eyes" || id === "none" || !bridge.themeRead) { setTheme(emptyTheme); return; }
     let active = true;
     let pending = cache.get(id);
     if (!pending) {
@@ -124,12 +124,26 @@ export function useTheme(bridge: ShellBridge, id: string | undefined) {
       cache.set(id, pending);
       pending.catch(() => cache.delete(id));
     } else { cache.delete(id); cache.set(id, pending); }
-    // Guarda só os 2 temas mais recentes (imagens, fonte e sons ocupam memória).
-    while (cache.size > 2) { const oldest = cache.keys().next().value as string; forgetTheme(oldest); }
+    // Guarda só os 4 temas mais recentes (mascote e notch em uso, mais os anteriores): imagens, fonte e sons ocupam memória.
+    while (cache.size > 4) { const oldest = cache.keys().next().value as string; forgetTheme(oldest); }
     pending.then(next => { if (active) setTheme(next); }).catch(() => { if (active) setTheme(emptyTheme); });
     return () => { active = false; };
   }, [bridge, id, version]);
   return theme;
+}
+
+/** Mascote e notch vêm de pacotes diferentes: imagens, sons e textos do mascote; HUD, brilho,
+ *  fonte e cores do tema do notch ("none": notch padrão). */
+export function combineThemes(mascot: ActiveTheme, notch: ActiveTheme): ActiveTheme {
+  const hud = notch.hud;
+  return {
+    id: `${mascot.id}|${notch.id}`, images: mascot.images, pixelated: mascot.pixelated, sounds: mascot.sounds, copy: mascot.copy,
+    hud, glow: hud ? notch.glow : mascot.glow, fontFamily: notch.fontFamily ?? mascot.fontFamily, colors: hud ? notch.colors ?? mascot.colors : mascot.colors,
+  };
+}
+export function useThemes(bridge: ShellBridge, mascotId: string | undefined, hudId: string | undefined) {
+  const mascot = useTheme(bridge, mascotId), notch = useTheme(bridge, hudId);
+  return useMemo(() => combineThemes(mascot, notch), [mascot, notch]);
 }
 
 /** Título do lembrete de água pelo tema: uma linha por nível (0–2; o 3 usa a última). */
