@@ -4,9 +4,6 @@
 # Uso:  powershell -ExecutionPolicy Bypass -File scripts\release.ps1 [-Notes "novidades"]
 # Pré-requisitos: gh logado; chave em %USERPROFILE%\.tauri\heydesk.key (gerada com
 # "npx tauri signer generate"); a chave pública correspondente em tauri.conf.json.
-# A chave tem senha; a senha fica em heydesk.key.pass, protegida pelo Windows (DPAPI):
-# só este usuário, neste PC, consegue abri-la. Para guardar uma cópia da senha num
-# gerenciador de senhas: scripts\key-password.ps1.
 # A versão publicada é a de src-tauri/tauri.conf.json (mantenha package.json e
 # Cargo.toml iguais).
 param(
@@ -23,7 +20,6 @@ $npm = (Get-Content package.json -Raw | ConvertFrom-Json).version
 $cargo = (Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "(.+)"' | Select-Object -First 1).Matches.Groups[1].Value
 if ($npm -ne $version -or $cargo -ne $version) { throw "Versões diferentes: tauri.conf $version, package.json $npm, Cargo.toml $cargo." }
 if (-not (Test-Path $Key)) { throw "Chave de assinatura não encontrada em $Key." }
-if (-not (Test-Path "$Key.pass")) { throw "Senha da chave não encontrada em $Key.pass." }
 if (git status --porcelain --untracked-files=no) { throw "Há alterações não commitadas." }
 $tag = "v$version"
 # Comandos externos escrevem avisos no stderr; o PowerShell 5 os trataria como erro fatal.
@@ -33,7 +29,7 @@ if ($LASTEXITCODE -eq 0) { throw "A versão $tag já foi publicada." }
 
 # Assinatura das atualizações (só neste processo).
 $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content $Key -Raw
-$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [System.Net.NetworkCredential]::new("", (Get-Content "$Key.pass" -Raw | ConvertTo-SecureString)).Password
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 npx tauri build
 if ($LASTEXITCODE) { throw "O build falhou." }
 $ErrorActionPreference = "Stop"
