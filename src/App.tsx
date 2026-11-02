@@ -111,7 +111,9 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const waterAngry = waterLevel >= 2;
   const recorder = useRecorder(bridge);
   const [prompterDrag, setPrompterDrag] = useState<number | null>(null);
-  const island = useIsland(bridge, fileDrag || (recorder.busy || recorder.countdown != null) && page === "prompter" || prompterDrag != null || pinned || settings.dirty || settings.saveState === "saving" || colorPickerActive || menuOpen, reducedMotion, activitySize, askTall && askOpen ? tallAsk : page === "home" ? homeSize : page === "prompter" ? { width: prompterSize.width, height: prompterDrag ?? notes.prompter.height ?? prompterSize.height } : null, prompterDrag != null ? 440 : 0, waterPending);
+  const update = useUpdate(bridge, true);
+  const updateInfo = update.state.kind === "available" || update.state.kind === "installing" ? update.state.info : update.state.kind === "error" ? update.state.info : undefined;
+  const island = useIsland(bridge, fileDrag || (recorder.busy || recorder.countdown != null) && page === "prompter" || prompterDrag != null || pinned || settings.dirty || settings.saveState === "saving" || colorPickerActive || menuOpen, reducedMotion, activitySize, askTall && askOpen ? tallAsk : page === "home" ? homeSize : page === "prompter" ? { width: prompterSize.width, height: prompterDrag ?? notes.prompter.height ?? prompterSize.height } : null, prompterDrag != null ? 440 : 0, waterPending || Boolean(updateInfo));
   // Tela cheia (jogo, vídeo) esconde a ilha no Rust: leituras e animações pausam junto.
   const [occluded, setOccluded] = useState(false);
   useEffect(() => {
@@ -245,8 +247,6 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   }, [pipAuto, liveGame?.id, sports.csLive?.gameId, sports.csLive?.streams?.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const waterShow = waterPending && !activity && !island.hidden;
   // Versão nova: aviso com "Atualizar" / "Depois" no notch fechado (a água tem prioridade).
-  const update = useUpdate(bridge, true);
-  const updateInfo = update.state.kind === "available" || update.state.kind === "installing" ? update.state.info : update.state.kind === "error" ? update.state.info : undefined;
   const updateShow = Boolean(updateInfo) && !waterShow && !activity && !island.hidden;
   useEffect(() => { (window as unknown as { heydeskPreviewUpdate?: (version?: string) => void }).heydeskPreviewUpdate = (version = "9.9.9") => update.preview({ current: "0.5.0", version, notes: "Prévia do aviso de atualização." }); }, [update.preview]);
   // Bebeu depois de um lembrete: o mascote se acalma e agradece por alguns segundos.
