@@ -1,7 +1,7 @@
 {
   "name": "heydesk",
   "private": true,
-  "version": "0.6.5",
+  "version": "0.6.6",
   "license": "MIT",
   "packageManager": "npm@11.19.0",
   "engines": {

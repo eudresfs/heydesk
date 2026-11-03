@@ -2,9 +2,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
 
-export interface RecorderCapabilities { ffmpeg: string | null; encoder: string | null; microphones: string[]; windows: string[] }
+/** Monitor na ordem do Windows Graphics Capture (`index` = monitor_idx do FFmpeg). */
+export interface RecorderMonitor { index: number; primary: boolean; width: number; height: number }
+export interface RecorderCapabilities { ffmpeg: string | null; encoder: string | null; microphones: string[]; windows: string[]; monitors?: RecorderMonitor[] }
 export interface RecorderState { state: "idle" | "recording" | "paused" | "saving" | "error"; elapsedMs: number; at: number; lastFile: string | null; error: string | null }
-export interface RecorderOptions { source: "screen" | "window"; window?: string; microphone?: string; systemAudio: boolean; fps?: number; highlight?: boolean }
+/** `monitor` ausente = o principal; `height` (ex.: 720) reduz a tela; `showNotch` deixa o notch aparecer no vídeo. */
+export interface RecorderOptions { source: "screen" | "window"; window?: string; monitor?: number; height?: number; microphone?: string; systemAudio: boolean; fps?: number; highlight?: boolean; showNotch?: boolean }
 
 const idle: RecorderState = { state: "idle", elapsedMs: 0, at: 0, lastFile: null, error: null };
 const OPTIONS_KEY = "heydesk:recorder-options";

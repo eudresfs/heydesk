@@ -4,11 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 const sizes = [160, 220, 300];
+// Algumas webcams já entregam a imagem espelhada; o botão inverte e a escolha fica lembrada.
+const MIRROR_KEY = "heydesk:camera-flip";
+const savedFlip = () => { try { return localStorage.getItem(MIRROR_KEY) === "1"; } catch { return false; } };
 
 export function CameraBubble() {
   const video = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [size, setSize] = useState(1);
+  const [flip, setFlip] = useState(savedFlip);
+  const toggleFlip = () => setFlip(value => { try { localStorage.setItem(MIRROR_KEY, value ? "0" : "1"); } catch { /* sem armazenamento */ } return !value; });
   useEffect(() => {
     let stream: MediaStream | null = null;
     navigator.mediaDevices?.getUserMedia({ video: { width: 640, height: 640, facingMode: "user" }, audio: false })
@@ -22,8 +27,9 @@ export function CameraBubble() {
   }, [size]);
   const drag = (event: React.PointerEvent) => { if (event.button === 0 && !(event.target as HTMLElement).closest("button")) void getCurrentWindow().startDragging(); };
   return <div className="camera-bubble" onPointerDown={drag} onDoubleClick={() => setSize((size + 1) % sizes.length)}>
-    {error ? <p>{error}</p> : <video ref={video} autoPlay muted playsInline />}
+    {error ? <p>{error}</p> : <video ref={video} autoPlay muted playsInline data-flip={flip || undefined} />}
     <div className="camera-tools">
+      <button type="button" aria-label="Espelhar câmera" aria-pressed={flip} title="Espelhar" onClick={toggleFlip}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3v18M8 7L4 12l4 5M16 7l4 5-4 5" /></svg></button>
       <button type="button" aria-label="Mudar tamanho" title="Tamanho (ou duplo clique)" onClick={() => setSize((size + 1) % sizes.length)}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg></button>
       <button type="button" aria-label="Fechar câmera" title="Fechar" onClick={() => void getCurrentWindow().close()}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
     </div>

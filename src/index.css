@@ -760,7 +760,8 @@ html[data-view=camera], html[data-view=camera] body { background: transparent !i
 /* O vídeo vai numa camada própria da GPU que ignora border-radius + overflow; clip-path corta de verdade. */
 .camera-bubble { position: fixed; inset: 0; border-radius: 50%; overflow: hidden; clip-path: circle(50% at 50% 50%); background: #111; cursor: grab; user-select: none; }
 .camera-bubble::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 3px rgba(255,255,255,.9); pointer-events: none; }
-.camera-bubble video { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; transform: scaleX(-1); pointer-events: none; }
+.camera-bubble video { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; pointer-events: none; }
+.camera-bubble video[data-flip] { transform: scaleX(-1); }
 .camera-bubble p { display: grid; place-items: center; height: 100%; margin: 0; padding: 20px; color: #ddd; font-size: 12px; text-align: center; }
 .camera-tools { position: absolute; left: 50%; bottom: 10%; display: flex; gap: 6px; translate: -50% 0; opacity: 0; transition: opacity 160ms ease; }
 .camera-bubble:hover .camera-tools { opacity: 1; }

@@ -136,12 +136,18 @@ function RecordOptions({ recorder }: { recorder: RecorderControl }) {
   const { caps, options } = recorder;
   if (caps && !caps.ffmpeg) return <div className="prompter-pop rec-pop" role="dialog" aria-label="Opções de gravação"><span>Instale o FFmpeg para gravar: <code>winget install Gyan.FFmpeg</code></span></div>;
   return <div className="prompter-pop rec-pop" role="dialog" aria-label="Opções de gravação">
-    <label>Gravar<select value={options.source === "window" ? options.window ?? "" : ""} onChange={event => recorder.setOptions(event.target.value ? { source: "window", window: event.target.value } : { source: "screen", window: undefined })}>
-      <option value="">Tela inteira</option>{caps?.windows.map(title => <option key={title} value={title}>{title.length > 48 ? `${title.slice(0, 47)}…` : title}</option>)}</select></label>
+    <label>Gravar<select value={options.source === "window" ? `w:${options.window ?? ""}` : options.monitor != null ? `m:${options.monitor}` : "m:"} onChange={event => { const [kind, value] = [event.target.value.slice(0, 1), event.target.value.slice(2)];
+      recorder.setOptions(kind === "w" ? { source: "window", window: value } : { source: "screen", window: undefined, monitor: value === "" ? undefined : Number(value) }); }}>
+      {/* Tela inteira: o principal por padrão; com mais de um monitor, cada um pelo nome. */}
+      {(caps?.monitors?.length ?? 0) > 1 ? <><option value="m:">Tela principal</option>{caps!.monitors!.map((monitor, order) => <option key={monitor.index} value={`m:${monitor.index}`}>{`Tela ${order + 1}${monitor.primary ? " (principal)" : ""} · ${monitor.width}×${monitor.height}`}</option>)}</>
+        : <option value="m:">Tela inteira</option>}
+      {caps?.windows.map(title => <option key={title} value={`w:${title}`}>{title.length > 48 ? `${title.slice(0, 47)}…` : title}</option>)}</select></label>
     <label>Microfone<select value={options.microphone ?? ""} onChange={event => recorder.setOptions({ microphone: event.target.value })}><option value="">Sem microfone</option>{caps?.microphones.map(name => <option key={name} value={name}>{name}</option>)}</select></label>
-    <label>Fluidez<select value={options.fps ?? (caps?.encoder === "libx264" ? 30 : 60)} onChange={event => recorder.setOptions({ fps: Number(event.target.value) })}><option value={60}>{caps?.encoder === "libx264" ? "60 quadros/s (pesado sem placa de vídeo)" : "60 quadros/s"}</option><option value={30}>30 quadros/s (mais leve)</option></select></label>
+    <label>Fluidez<select value={options.fps ?? 30} onChange={event => recorder.setOptions({ fps: Number(event.target.value) })}><option value={30}>30 quadros/s</option><option value={60}>60 quadros/s (pede máquina forte)</option></select></label>
+    {options.source !== "window" && <label>Resolução<select value={options.height ?? 0} onChange={event => recorder.setOptions({ height: Number(event.target.value) || undefined })}><option value={0}>Original da tela</option><option value={720}>720p (mais leve e fluido)</option></select></label>}
     <label className="rec-check"><input type="checkbox" checked={options.systemAudio} onChange={event => recorder.setOptions({ systemAudio: event.target.checked })} />Som do computador</label>
     <label className="rec-check"><input type="checkbox" checked={options.highlight !== false} onChange={event => recorder.setOptions({ highlight: event.target.checked })} />Realçar cursor e cliques</label>
+    <label className="rec-check"><input type="checkbox" checked={options.showNotch === true} onChange={event => recorder.setOptions({ showNotch: event.target.checked })} />Mostrar o notch no vídeo</label>
     <span className="rec-hint">Atalhos: Ctrl+Alt+R grava/para · Ctrl+Alt+P pausa</span>
     <span className="rec-hint">{caps ? `Vídeo ${caps.encoder === "libx264" ? "por CPU" : "pela placa de vídeo"} · salva em Vídeos\\Heydesk` : "Carregando…"}</span>
   </div>;

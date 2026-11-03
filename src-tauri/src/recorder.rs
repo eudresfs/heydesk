@@ -1,6 +1,6 @@
 // Gravação de tela com o FFmpeg instalado na máquina (winget: Gyan.FFmpeg).
-// Vídeo: Windows Graphics Capture (filtro gfxcapture, FFmpeg 8+) no monitor principal
-// ou na janela escolhida; é pela GPU e não trava com janelas transparentes (bolha de
+// Vídeo: Windows Graphics Capture (filtro gfxcapture, FFmpeg 8+) no monitor escolhido
+// (o principal por padrão) ou na janela escolhida; é pela GPU e não trava com janelas transparentes (bolha de
 // câmera, realce). Sem gfxcapture: gdigrab (ddagrab falha em notebooks com duas GPUs).
 // Áudio: microfone (dshow) e áudio do sistema (WASAPI loopback, enviado ao FFmpeg
 // por pipe nomeado). Pausar = fechar o segmento atual; parar = juntar os segmentos
@@ -21,7 +21,13 @@ const NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Clone, Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
-pub struct Capabilities { pub ffmpeg: Option<String>, pub encoder: Option<String>, pub microphones: Vec<String>, pub windows: Vec<String> }
+pub struct Capabilities { pub ffmpeg: Option<String>, pub encoder: Option<String>, pub microphones: Vec<String>, pub windows: Vec<String>, pub monitors: Vec<Monitor> }
+
+/// Monitor na ordem do Windows; posição e tamanho em pixels físicos (área de trabalho virtual,
+/// pode ser negativa à esquerda do principal). `handle` é o HMONITOR passado ao gfxcapture.
+#[derive(Clone, Debug, Serialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Monitor { pub index: u32, pub primary: bool, pub x: i32, pub y: i32, pub width: i32, pub height: i32, #[serde(skip)] pub handle: u64 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,6 +38,12 @@ pub struct Options {
     pub microphone: Option<String>,
     pub system_audio: bool,
     pub fps: Option<u32>,
+    /// Índice em `monitors()`; ausente = o principal.
+    #[serde(default)] pub monitor: Option<u32>,
+    /// Altura máxima do vídeo da tela (ex.: 720): reduz na placa antes de copiar, mais leve.
+    #[serde(default)] pub height: Option<u32>,
+    /// O notch aparece no vídeo (por padrão o Windows o tira da captura).
+    #[serde(default)] pub show_notch: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Default, PartialEq)]
@@ -55,7 +67,9 @@ fn hide_from_capture(app: &AppHandle, hidden: bool) {
         use tauri::Manager;
         use ::windows::Win32::{Foundation::HWND, UI::WindowsAndMessaging::{SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE}};
         if let Some(Ok(hwnd)) = app.get_webview_window("main").map(|window| window.hwnd()) {
-            let _ = unsafe { SetWindowDisplayAffinity(HWND(hwnd.0), if hidden { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE }) };
+            if let Err(error) = unsafe { SetWindowDisplayAffinity(HWND(hwnd.0), if hidden { WDA_EXCLUDEFROMCAPTURE } else { WDA_NONE }) } {
+                eprintln!("[Heydesk] Não foi possível tirar o notch da gravação: {error}");
+            }
         }
     }
     #[cfg(not(windows))]
@@ -140,10 +154,40 @@ pub fn windows() -> Vec<String> {
     { Vec::new() }
 }
 
+/// Monitores ligados, na ordem do Windows.
+pub fn monitors() -> Vec<Monitor> {
+    #[cfg(all(windows, not(test)))]
+    unsafe {
+        use ::windows::Win32::{Foundation::{LPARAM, RECT}, Graphics::Gdi::{EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO}};
+        unsafe extern "system" fn each(monitor: HMONITOR, _: HDC, _: *mut RECT, data: LPARAM) -> ::windows::core::BOOL {
+            let list = unsafe { &mut *(data.0 as *mut Vec<Monitor>) };
+            let mut info = MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+            if unsafe { GetMonitorInfoW(monitor, &mut info) }.as_bool() {
+                let rect = info.rcMonitor;
+                list.push(Monitor { index: list.len() as u32, primary: info.dwFlags & 1 != 0, x: rect.left, y: rect.top, width: rect.right - rect.left, height: rect.bottom - rect.top, handle: monitor.0 as u64 });
+            }
+            true.into()
+        }
+        let mut list: Vec<Monitor> = Vec::new();
+        let _ = EnumDisplayMonitors(None, None, Some(each), LPARAM(&mut list as *mut _ as isize));
+        if !list.is_empty() { return list; }
+    }
+    let (width, height) = primary_size();
+    vec![Monitor { index: 0, primary: true, width, height, ..Default::default() }]
+}
+
+/// Monitor a gravar: o escolhido (se ainda existir) ou o principal.
+fn target_monitor(choice: Option<u32>) -> Monitor {
+    let list = monitors();
+    choice.and_then(|index| list.iter().find(|monitor| monitor.index == index).cloned())
+        .or_else(|| list.iter().find(|monitor| monitor.primary).cloned())
+        .or_else(|| list.first().cloned()).unwrap_or_default()
+}
+
 pub fn capabilities() -> Capabilities {
-    let Some(ffmpeg) = find_ffmpeg() else { return Capabilities { windows: windows(), ..Default::default() } };
+    let Some(ffmpeg) = find_ffmpeg() else { return Capabilities { windows: windows(), monitors: monitors(), ..Default::default() } };
     warm_up();
-    Capabilities { encoder: Some(encoder(&ffmpeg)), microphones: microphones(&ffmpeg), windows: windows(), ffmpeg: Some(ffmpeg.to_string_lossy().to_string()) }
+    Capabilities { encoder: Some(encoder(&ffmpeg)), microphones: microphones(&ffmpeg), windows: windows(), monitors: monitors(), ffmpeg: Some(ffmpeg.to_string_lossy().to_string()) }
 }
 
 /// Tamanho do monitor principal em pixels físicos (ele começa sempre em 0,0).
@@ -227,23 +271,26 @@ fn capture_for(ffmpeg: &Path, options: &Options) -> Capture {
 }
 
 /// Argumentos do FFmpeg para um segmento.
-pub(crate) fn segment_args(options: &Options, capture: Capture, encoder: &str, pipe: Option<(&str, u32, u16, bool)>, output: &Path) -> Vec<String> {
-    // 60 fps só com captura e codificação pela placa de vídeo; sem codificador de GPU
-    // (x264 na CPU) ou com gdigrab, 30 fps para não travar em máquinas modestas.
-    let software = encoder == "libx264";
-    let rate = options.fps.unwrap_or(if capture == Capture::Gdi || software { 30 } else { 60 }).clamp(10, 60);
+pub(crate) fn segment_args(options: &Options, capture: Capture, encoder: &str, pipe: Option<(&str, u32, u16, bool)>, monitor: &Monitor, output: &Path) -> Vec<String> {
+    // 30 fps por padrão: cada quadro sai da placa para a CPU (hwdownload) antes de codificar,
+    // e a 60 fps um notebook modesto entregava ~10 quadros distintos por segundo. 60 é opção.
+    let rate = options.fps.unwrap_or(30).clamp(10, 60);
     let fps = rate.to_string();
     let mut args: Vec<String> = ["-hide_banner", "-loglevel", "warning", "-y"].iter().map(|s| s.to_string()).collect();
     let mut push = |items: &[&str]| args.extend(items.iter().map(|s| s.to_string()));
     let window = options.window.as_deref().filter(|title| options.source == "window" && !title.is_empty());
+    // Tela reduzida (ex.: 720p): a placa diminui antes de copiar; largura par na proporção do monitor.
+    let reduced = options.height.filter(|height| window.is_none() && *height >= 360 && (*height as i32) < monitor.height)
+        .map(|height| ((monitor.width as i64 * height as i64 / monitor.height.max(1) as i64) / 2 * 2, height));
     match (capture, window) {
         (Capture::Wgc(hwnd), _) => {
             // width/height=-2: o próprio gfxcapture entrega largura e altura pares.
-            let source = hwnd.map(|hwnd| format!("hwnd={hwnd}")).unwrap_or_else(|| "monitor_idx=0".into());
-            push(&["-thread_queue_size", "512", "-f", "lavfi", "-i", &format!("gfxcapture={source}:max_framerate={fps}:width=-2:height=-2,hwdownload,format=bgra,fps={fps}")]);
+            let source = match hwnd { Some(hwnd) => format!("hwnd={hwnd}"), None if monitor.handle != 0 => format!("hmonitor={}", monitor.handle), None => format!("monitor_idx={}", monitor.index) };
+            let size = reduced.map(|(width, height)| format!("width={width}:height={height}:resize_mode=scale_aspect")).unwrap_or_else(|| "width=-2:height=-2".into());
+            push(&["-thread_queue_size", "512", "-f", "lavfi", "-i", &format!("gfxcapture={source}:max_framerate={fps}:{size},hwdownload,format=bgra,fps={fps}")]);
         }
         (Capture::Gdi, Some(title)) => push(&["-thread_queue_size", "512", "-f", "gdigrab", "-framerate", &fps, "-draw_mouse", "1", "-i", &format!("title={title}")]),
-        (Capture::Gdi, None) => { let (width, height) = primary_size(); push(&["-thread_queue_size", "512", "-f", "gdigrab", "-framerate", &fps, "-draw_mouse", "1", "-offset_x", "0", "-offset_y", "0", "-video_size", &format!("{width}x{height}"), "-i", "desktop"]) }
+        (Capture::Gdi, None) => push(&["-thread_queue_size", "512", "-f", "gdigrab", "-framerate", &fps, "-draw_mouse", "1", "-offset_x", &monitor.x.to_string(), "-offset_y", &monitor.y.to_string(), "-video_size", &format!("{}x{}", monitor.width, monitor.height), "-i", "desktop"]),
     }
     let mut audio = 0;
     if let Some(mic) = options.microphone.as_deref().filter(|mic| !mic.is_empty()) {
@@ -258,7 +305,8 @@ pub(crate) fn segment_args(options: &Options, capture: Capture, encoder: &str, p
     // o vídeo (~4 fps em 1080p num notebook modesto). Nos demais: largura e altura pares
     // (exigência do H.264) e NV12 aqui.
     let gpu_converts = matches!(capture, Capture::Wgc(_)) && matches!(encoder, "h264_nvenc" | "h264_qsv");
-    if !gpu_converts { push(&["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=nv12"]); }
+    let gdi_scale = reduced.filter(|_| capture == Capture::Gdi).map(|(width, height)| format!("scale={width}:{height},")).unwrap_or_default();
+    if !gpu_converts { push(&["-vf", &format!("{gdi_scale}scale=trunc(iw/2)*2:trunc(ih/2)*2,format=nv12")]); }
     match audio {
         2 => push(&["-filter_complex", "[1:a][2:a]amix=inputs=2:duration=longest:normalize=0[a]", "-map", "0:v", "-map", "[a]"]),
         1 => push(&["-map", "0:v", "-map", "1:a"]),
@@ -274,7 +322,7 @@ pub(crate) fn segment_args(options: &Options, capture: Capture, encoder: &str, p
 }
 
 struct Segment { child: Child, audio_stop: Option<Arc<AtomicBool>> }
-struct Session { options: Options, encoder: String, ffmpeg: PathBuf, dir: PathBuf, parts: Vec<PathBuf>, segment: Option<Segment>, recorded: Duration, since: Option<Instant>, output: PathBuf }
+struct Session { options: Options, monitor: Monitor, encoder: String, ffmpeg: PathBuf, dir: PathBuf, parts: Vec<PathBuf>, segment: Option<Segment>, recorded: Duration, since: Option<Instant>, output: PathBuf }
 
 #[derive(Default)]
 pub struct Recorder { session: Mutex<Option<Session>>, state: Mutex<RecorderState> }
@@ -297,9 +345,10 @@ impl Recorder {
         let output = videos.join(format!("Gravação {stamp}.mp4"));
         let dir = std::env::temp_dir().join(format!("heydesk-rec-{}", now_ms()));
         std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
-        let mut session = Session { encoder: encoder(&ffmpeg), options, ffmpeg, dir, parts: Vec::new(), segment: None, recorded: Duration::ZERO, since: None, output };
-        hide_from_capture(app, true);
-        if let Err(error) = start_segment(&mut session) { hide_from_capture(app, false); return Err(error); }
+        let hide = !options.show_notch;
+        let mut session = Session { encoder: encoder(&ffmpeg), monitor: target_monitor(options.monitor), options, ffmpeg, dir, parts: Vec::new(), segment: None, recorded: Duration::ZERO, since: None, output };
+        if hide { hide_from_capture(app, true); }
+        if let Err(error) = start_segment(&mut session) { if hide { hide_from_capture(app, false); } return Err(error); }
         *slot = Some(session);
         drop(slot);
         self.publish(app, |state| { state.state = "recording".into(); state.elapsed_ms = 0; state.error = None; });
@@ -332,7 +381,7 @@ impl Recorder {
     pub fn stop(self: &Arc<Self>, app: &AppHandle) -> Result<RecorderState, String> {
         let mut session = self.session.lock().map_err(|_| "Gravador indisponível.".to_string())?.take().ok_or("Nada gravando.")?;
         if session.segment.is_some() { stop_segment(&mut session)?; }
-        hide_from_capture(app, false);
+        if !session.options.show_notch { hide_from_capture(app, false); }
         let elapsed = Self::elapsed(&session);
         self.publish(app, |state| { state.state = "saving".into(); state.elapsed_ms = elapsed; });
         let (recorder, app) = (self.clone(), app.clone());
@@ -354,7 +403,7 @@ fn start_segment(session: &mut Session) -> Result<(), String> {
         let (name, rate, channels, float, stop) = loopback::start(session.parts.len()).map_err(|error| format!("Áudio do sistema indisponível: {error}"))?;
         (Some((name, rate, channels, float)), Some(stop))
     } else { (None, None) };
-    let args = segment_args(&session.options, capture_for(&session.ffmpeg, &session.options), &session.encoder, pipe.as_ref().map(|(name, rate, channels, float)| (name.as_str(), *rate, *channels, *float)), &part);
+    let args = segment_args(&session.options, capture_for(&session.ffmpeg, &session.options), &session.encoder, pipe.as_ref().map(|(name, rate, channels, float)| (name.as_str(), *rate, *channels, *float)), &session.monitor, &part);
     let log = std::fs::File::create(session.dir.join(format!("ffmpeg-{:03}.log", session.parts.len()))).map_err(|error| error.to_string())?;
     let child = command(&session.ffmpeg).args(&args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(log).spawn()
         .map_err(|error| { if let Some(stop) = &audio_stop { stop.store(true, Ordering::Relaxed); } format!("Não foi possível iniciar o FFmpeg: {error}") })?;
@@ -493,25 +542,33 @@ mod tests {
     }
     #[test]
     fn segment_args_mix_mic_and_system_audio() {
-        let options = Options { source: "screen".into(), window: None, microphone: Some("Mic".into()), system_audio: true, fps: Some(30) };
-        let args = segment_args(&options, Capture::Gdi, "h264_qsv", Some((r"\\.\pipe\x", 48_000, 2, true)), Path::new("out.mkv"));
+        let primary = Monitor { index: 1, primary: true, x: 0, y: 0, width: 1920, height: 1080, handle: 777 };
+        let options = Options { source: "screen".into(), window: None, microphone: Some("Mic".into()), system_audio: true, fps: Some(30), monitor: None, height: None, show_notch: false };
+        let args = segment_args(&options, Capture::Gdi, "h264_qsv", Some((r"\\.\pipe\x", 48_000, 2, true)), &primary, Path::new("out.mkv"));
         let joined = args.join(" ");
         assert!(joined.contains("-f gdigrab -framerate 30 -draw_mouse 1 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop"));
         assert!(joined.contains("-f dshow -audio_buffer_size 50 -i audio=Mic"));
         assert!(joined.contains(r"-f f32le -ar 48000 -ac 2 -i \\.\pipe\x"));
         assert!(joined.contains("amix=inputs=2"));
         assert!(joined.ends_with("-c:a aac -b:a 160k out.mkv"));
-        let window = Options { source: "window".into(), window: Some("Bloco de Notas".into()), microphone: None, system_audio: false, fps: None };
-        let joined = segment_args(&window, Capture::Gdi, "libx264", None, Path::new("o.mkv")).join(" ");
+        let window = Options { source: "window".into(), window: Some("Bloco de Notas".into()), microphone: None, system_audio: false, fps: None, monitor: None, height: Some(720), show_notch: false };
+        let joined = segment_args(&window, Capture::Gdi, "libx264", None, &primary, Path::new("o.mkv")).join(" ");
         assert!(joined.contains("-f gdigrab -framerate 30 -draw_mouse 1 -i title=Bloco de Notas"));
         assert!(joined.contains("-map 0:v -c:v libx264"));
-        let joined = segment_args(&options, Capture::Wgc(None), "h264_qsv", None, Path::new("o.mkv")).join(" ");
-        assert!(joined.contains("-f lavfi -i gfxcapture=monitor_idx=0:max_framerate=30:width=-2:height=-2,hwdownload,format=bgra,fps=30"));
+        let joined = segment_args(&options, Capture::Wgc(None), "h264_qsv", None, &primary, Path::new("o.mkv")).join(" ");
+        assert!(joined.contains("-f lavfi -i gfxcapture=hmonitor=777:max_framerate=30:width=-2:height=-2,hwdownload,format=bgra,fps=30"), "monitor pelo HMONITOR, não pelo índice");
         assert!(!joined.contains("format=nv12"), "QSV converte BGRA na placa");
-        let joined = segment_args(&window, Capture::Wgc(Some(42)), "h264_qsv", None, Path::new("o.mkv")).join(" ");
-        assert!(joined.contains("-i gfxcapture=hwnd=42:max_framerate=60:"));
-        assert!(joined.contains("-b:v 12M"));
-        let joined = segment_args(&options, Capture::Wgc(None), "libx264", None, Path::new("o.mkv")).join(" ");
+        let joined = segment_args(&window, Capture::Wgc(Some(42)), "h264_qsv", None, &primary, Path::new("o.mkv")).join(" ");
+        assert!(joined.contains("-i gfxcapture=hwnd=42:max_framerate=30:width=-2:height=-2,"), "30 fps por padrão; janela não reduz");
+        assert!(joined.contains("-b:v 8M"));
+        // Monitor à esquerda do principal (gdigrab com deslocamento negativo) e 720p.
+        let left = Monitor { index: 0, primary: false, x: -1920, y: -6, width: 1920, height: 1080, handle: 0 };
+        let small = Options { height: Some(720), monitor: Some(0), fps: Some(60), ..options.clone() };
+        let joined = segment_args(&small, Capture::Gdi, "h264_qsv", None, &left, Path::new("o.mkv")).join(" ");
+        assert!(joined.contains("-offset_x -1920 -offset_y -6 -video_size 1920x1080 -i desktop") && joined.contains("scale=1280:720,"));
+        let joined = segment_args(&small, Capture::Wgc(None), "h264_qsv", None, &left, Path::new("o.mkv")).join(" ");
+        assert!(joined.contains("gfxcapture=monitor_idx=0:max_framerate=60:width=1280:height=720:resize_mode=scale_aspect,"));
+        let joined = segment_args(&options, Capture::Wgc(None), "libx264", None, &primary, Path::new("o.mkv")).join(" ");
         assert!(joined.contains("max_framerate=30:") && joined.contains("format=nv12") && joined.contains("-preset veryfast"), "sem GPU: 30 fps e NV12 na CPU");
     }
 }
