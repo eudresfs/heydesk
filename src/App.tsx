@@ -201,17 +201,23 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     return () => { stops.forEach(stop => void stop.then(fn => fn()).catch(() => {})); };
   }, [bridge]);
   // Lembretes da agenda (locais e assinadas): 30 e 15 min antes e na hora; cada aviso sai uma vez.
+  // Só conta como dado quando dá para mostrar (painel fechado, notch visível, fora de tela cheia);
+  // até lá continua devido e sai no primeiro tique possível.
   const reminded = useRef(new Set<string>());
   const agendaTick = useNow(true, 20_000);
+  const agendaReady = activityEnabled && !occluded;
   useEffect(() => {
+    if (!agendaReady) return;
     const feed = calendars.events.filter(event => !event.allDay).map(event => ({ id: event.id, title: event.title, at: event.at, remindMin: 0, reminders: defaultReminders }));
-    for (const due of dueReminders([...notes.events, ...feed], agendaTick)) {
+    const now = Date.now();
+    for (const due of dueReminders([...notes.events, ...feed], now)) {
       if (reminded.current.has(due.key)) continue;
       reminded.current.add(due.key);
       const time = new Date(due.event.at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-      pushRef.current({ kind: "agenda", group: "agenda", icon: "calendar", value: due.event.title, label: due.kind === "now" ? `Agora · ${time}` : `Em ${due.minutes} min · ${time}`, priority: 4, durationMs: 7000, width: 380, mood: "wide", tone: "neutral" });
+      const left = Math.max(1, Math.ceil((due.event.at - now) / 60_000));
+      pushRef.current({ kind: "agenda", group: "agenda", icon: "calendar", value: due.event.title, label: due.kind === "now" ? `Agora · ${time}` : `Em ${left} min · ${time}`, priority: 4, durationMs: 7000, width: 380, mood: "wide", tone: "neutral" });
     }
-  }, [agendaTick, notes.events, calendars.events]);
+  }, [agendaTick, agendaReady, notes.events, calendars.events]);
   const [notificationStatus, setNotificationStatus] = useState("");
   useEffect(() => {
     if (settings.loadState !== "ready" || !bridge.configureNotifications) return;

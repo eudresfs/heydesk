@@ -87,7 +87,11 @@ test("agenda entende hora no texto e avisa 10 min antes e na hora, uma janela de
   const event = { id: "e", title: "Dentista", at: new Date(2026, 9, 30, 15, 0).getTime(), remindMin: 10 };
   assert.deepEqual(dueReminders([event], event.at - 10 * 60_000 + 5_000).map(due => due.kind), ["before"]);
   assert.deepEqual(dueReminders([event], event.at + 30_000).map(due => due.kind), ["now"]);
-  assert.deepEqual(dueReminders([event], event.at - 5 * 60_000), []);
+  assert.deepEqual(dueReminders([event], event.at - 11 * 60_000), []);
+  // Tique atrasado (suspensão, painel aberto): o aviso continua devido até o início e "na hora" por 10 min.
+  assert.deepEqual(dueReminders([event], event.at - 5 * 60_000).map(due => due.key), ["e:b10"]);
+  assert.deepEqual(dueReminders([event], event.at + 9 * 60_000).map(due => due.kind), ["now"]);
+  assert.deepEqual(dueReminders([event], event.at + 11 * 60_000), []);
   // Campo de horário vale quando o texto não traz hora; número solto não é hora.
   const picked = parseEventText("Reunião 2", day, now, "16:45")!;
   assert.equal(picked.title, "Reunião 2"); assert.equal(new Date(picked.at).getHours(), 16); assert.equal(new Date(picked.at).getMinutes(), 45);
@@ -96,6 +100,7 @@ test("agenda entende hora no texto e avisa 10 min antes e na hora, uma janela de
   const both = { ...event, remindMin: 0, reminders: [30, 15] };
   assert.deepEqual(dueReminders([both], both.at - 30 * 60_000 + 1_000).map(due => [due.kind, due.minutes]), [["before", 30]]);
   assert.deepEqual(dueReminders([both], both.at - 15 * 60_000 + 1_000).map(due => due.key), ["e:b15"]);
+  assert.deepEqual(dueReminders([both], both.at - 20 * 60_000).map(due => due.key), ["e:b30"], "entre os dois, o de 30 segue devido");
 });
 
 test("água divide a meta pelo período, recalcula a cada gole e azeda com recusas", () => {

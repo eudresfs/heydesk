@@ -303,7 +303,7 @@ export function WaterSection({ notes }: { notes?: NotesControl }) {
       <Row title="Meta do dia" desc="Quanto beber até o fim do período.">
         <span className="set-stepper"><button type="button" aria-label="Menos 250 ml" disabled={water.goalMl <= 500} onClick={() => notes.setWater({ goalMl: water.goalMl - 250 })}>−</button><output>{liters(water.goalMl)} L</output><button type="button" aria-label="Mais 250 ml" disabled={water.goalMl >= 6000} onClick={() => notes.setWater({ goalMl: water.goalMl + 250 })}>+</button></span>
       </Row>
-      <Row title="Gole" desc="Quanto cada lembrete pede." wide>{choose([150, 200, 250, 300, 400, 500], settings.sip, "cupMl")}</Row>
+      <Row title="Gole" desc="Quanto cada lembrete pede." wide>{choose([50, 150, 200, 250, 300, 400, 500], settings.sip, "cupMl")}</Row>
       <Row title="Garrafa" desc="Quando acaba, o lembrete pede para encher." wide>{choose([500, 600, 750, 1000, 1500], settings.bottle, "bottleMl")}</Row>
     </Group>
     <Group title="Lembretes">

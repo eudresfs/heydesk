@@ -103,8 +103,13 @@ export function useNow(active: boolean, every = 500) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
-    const timer = window.setInterval(() => setNow(Date.now()), every);
-    return () => window.clearInterval(timer);
+    // Janela escondida (tela cheia, suspensão) atrasa timers: ao voltar, relê o relógio na hora.
+    const tick = () => setNow(Date.now());
+    const timer = window.setInterval(tick, every);
+    const visible = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("focus", tick);
+    return () => { window.clearInterval(timer); document.removeEventListener("visibilitychange", visible); window.removeEventListener("focus", tick); };
   }, [active, every]);
   return now;
 }

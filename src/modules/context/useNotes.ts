@@ -30,15 +30,20 @@ export function parseEventText(text: string, day: Date, now: number, time?: stri
 }
 export const defaultReminders = [30, 15];
 const remindersOf = (event: CalendarEvent) => event.reminders ?? (event.remindMin > 0 ? [event.remindMin] : []);
-/** Avisos devidos agora: `remindMin` antes e na hora (janela de 1 minuto). */
+/** Aviso "na hora" ainda vale até 10 min depois do início (app voltando de suspensão, tela cheia). */
+const NOW_GRACE = 10 * 60_000;
+/** Avisos devidos agora, um por evento: o "antes" mais próximo já alcançado vale até o início
+ * (não se perde se o tique atrasar ou o painel estiver aberto); depois, "na hora" por 10 min.
+ * Quem chama marca a chave como dada só quando o aviso aparece. */
 export function dueReminders(events: CalendarEvent[], now: number) {
   const due: { event: CalendarEvent; kind: "before" | "now"; key: string; minutes: number }[] = [];
   for (const event of events) {
-    for (const minutes of remindersOf(event)) {
-      const before = event.at - minutes * 60_000;
-      if (minutes > 0 && now >= before && now < before + 60_000) due.push({ event, kind: "before", key: `${event.id}:b${minutes}`, minutes });
+    if (now >= event.at) {
+      if (now < event.at + NOW_GRACE) due.push({ event, kind: "now", key: `${event.id}:n`, minutes: 0 });
+      continue;
     }
-    if (now >= event.at && now < event.at + 60_000) due.push({ event, kind: "now", key: `${event.id}:n`, minutes: 0 });
+    const reached = remindersOf(event).filter(minutes => minutes > 0 && now >= event.at - minutes * 60_000);
+    if (reached.length) { const minutes = Math.min(...reached); due.push({ event, kind: "before", key: `${event.id}:b${minutes}`, minutes }); }
   }
   return due;
 }

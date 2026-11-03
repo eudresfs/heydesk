@@ -304,8 +304,12 @@ const SCRIPT: &str = r##"
   const maps = () => [...document.querySelectorAll(".mapholder")].filter(holder => !holder.closest(".simulated-veto-only")).map(holder => {
     const scores = [...holder.querySelectorAll(".results-team-score")].map(e => parseInt(e.textContent.trim()));
     const left = holder.querySelector(".results-left")?.classList;
+    // O mapa em andamento já vem marcado "won"/"lost" por quem está na frente: só vale com placar
+    // final (13 com o outro até 11; prorrogação 16, 19… com 2 de vantagem).
+    const high = Math.max(scores[0], scores[1]), low = Math.min(scores[0], scores[1]);
+    const final = (high === 13 && low <= 11) || (high > 13 && (high - 13) % 3 === 0 && high - low >= 2);
     return { name: (holder.querySelector(".mapname")?.textContent.trim() || "").replace(/\s*-\s*\d+%$/, ""), home: Number.isFinite(scores[0]) ? scores[0] : null, away: Number.isFinite(scores[1]) ? scores[1] : null,
-      winner: left?.contains("won") ? "home" : left?.contains("lost") ? "away" : "" };
+      winner: !final ? "" : left?.contains("won") ? "home" : left?.contains("lost") ? "away" : "" };
   }).filter(map => map.name && !/^tba$/i.test(map.name));
   const score = () => {
     const root = document.querySelector("#scoreboardElement");
