@@ -17,7 +17,7 @@ export interface ActiveTheme {
   sounds: Map<SoundKind, AudioBuffer>;
   /** Visual do notch; imagens já como data: URL. */
   hud?: {
-    surface?: string; text?: string; muted?: string; accent?: string; border?: string; frame?: string; frameSlice: number; panel?: string;
+    surface?: string; text?: string; muted?: string; accent?: string; border?: string; card?: string; frame?: string; frameSlice: number; panel?: string;
     texture?: string; textureOpacity: number; corner?: string; crest?: string; bevel: boolean; shimmer: boolean; panelOpacity: number;
     /** Filetes que seguem o formato do notch, de fora para dentro. */
     lines: { color: string; inset: number; width: number; glow: boolean }[];
@@ -40,6 +40,13 @@ export function hudStyle(hud: ActiveTheme["hud"]): Record<string, string> {
     // Capa vazia do player: tom do tema com um anel discreto da cor de destaque.
     vars["--art-bg"] = `color-mix(in srgb, ${hud.surface} 76%, ${hud.accent ?? "white"})`;
     if (hud.accent) vars["--art-ring"] = `inset 0 0 0 1px color-mix(in srgb, ${hud.accent} 35%, transparent)`;
+  }
+  if (hud.card) {
+    // Cartões neutros, sem o tom de destaque: só a cor pedida, um pouco mais escura embaixo.
+    vars["--card-a"] = hud.card;
+    vars["--card-b"] = `color-mix(in srgb, ${hud.card} 82%, black)`;
+    vars["--art-bg"] = `color-mix(in srgb, ${hud.card} 90%, white)`;
+    vars["--art-ring"] = "inset 0 0 0 1px rgba(255,255,255,.08)";
   }
   // Textos secundários mais fortes que no tema padrão: a textura atrás pede contraste.
   if (hud.text) { vars["--text"] = hud.text; vars["--text-muted"] = hud.muted ?? `color-mix(in srgb, ${hud.text} 72%, transparent)`; vars["--text-faint"] = `color-mix(in srgb, ${hud.muted ?? hud.text} 62%, transparent)`; }
@@ -95,7 +102,7 @@ async function resolve(bundle: ThemeBundle): Promise<ActiveTheme> {
   const images = Object.keys(bundle.images).length ? bundle.images : null;
   const source = manifest.hud;
   const hud = source ? {
-    surface: source.surface ?? undefined, text: source.text ?? undefined, muted: source.muted ?? undefined, accent: source.accent ?? undefined, border: source.border ?? undefined,
+    surface: source.surface ?? undefined, text: source.text ?? undefined, muted: source.muted ?? undefined, accent: source.accent ?? undefined, border: source.border ?? undefined, card: source.card ?? undefined,
     frame: bundle.hud?.frame, frameSlice: source.frameSlice ?? 16, panel: bundle.hud?.panel,
     texture: bundle.hud?.texture, textureOpacity: source.textureOpacity ?? .5, corner: bundle.hud?.corner, crest: bundle.hud?.crest,
     bevel: source.bevel === true, shimmer: source.shimmer === true, panelOpacity: source.panelOpacity ?? .38,

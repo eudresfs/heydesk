@@ -75,12 +75,12 @@ h1:focus, .panel:focus { outline: none; }
 .compact-weather { font-size: 12px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .compact-media { display: flex; height: 12px; align-items: center; gap: 2px; }
 /* Barras do equalizador: scaleY (compositor) em vez de height (layout a cada quadro). */
-.compact-media i { width: 2.2px; height: 100%; border-radius: 2px; background: #fff; transform-origin: center; animation: eq .9s ease-in-out infinite alternate; }
+.compact-media i { width: 2.2px; height: 100%; border-radius: 2px; background: #fff; transform-origin: center; animation: eq .9s steps(4) infinite alternate; }
 .compact-media i:nth-child(2) { animation-delay: -.3s; } .compact-media i:nth-child(3) { animation-delay: -.6s; } .compact-media i:nth-child(4) { animation-delay: -.15s; } .compact-media i:nth-child(5) { animation-delay: -.45s; }
 @keyframes eq { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
 .mascot-ambient { position: absolute; inset: auto 0 0; height: 90%; opacity: 0; transition: opacity 400ms ease; background: linear-gradient(90deg, var(--glow-a, #19b8ff), var(--glow-b, #2d5bff) 55%, var(--glow-c, #7b4bff)); mask: linear-gradient(to top, #000, rgba(0,0,0,.5) 30%, transparent); pointer-events: none; }
 /* Repouso: o relógio cede aos olhos dormindo e à luz de base, como no Nusa. */
-[data-mascot-phase=rest] .mascot-ambient { opacity: 1; animation: breathe 6s ease-in-out infinite; }
+[data-mascot-phase=rest] .mascot-ambient { opacity: 1; animation: breathe 6s steps(18) infinite; }
 [data-mascot-phase=rest] .compact-side { opacity: 0; }
 @keyframes breathe { 0%, 100% { opacity: .7; } 50% { opacity: 1; } }
 
@@ -128,11 +128,11 @@ h1:focus, .panel:focus { outline: none; }
 [data-rec] .compact-button > :not(.rec-compact):not(.mascot-ambient):not(.sr-only) { visibility: hidden; }
 [data-rec] .mascot-ambient { opacity: 0; }
 .rec-compact { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; gap: 8px; color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
-.rec-compact i { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); box-shadow: 0 0 8px var(--rec); animation: hd-breathe 1.2s ease-in-out infinite; }
+.rec-compact i { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); box-shadow: 0 0 8px var(--rec); animation: hd-breathe 1.2s steps(6) infinite; }
 .rec-compact[data-paused] i { background: var(--warn); box-shadow: none; animation: none; }
 .rec-compact b { font-weight: 500; letter-spacing: 0; font-variant-numeric: tabular-nums; color: rgba(255,255,255,.85); }
 .toast-water { color: var(--info); box-shadow: 0 0 18px color-mix(in oklab, var(--info) 45%, transparent); }
-.toast-water svg { animation: hd-breathe 1.4s ease-in-out infinite; }
+.toast-water svg { animation: hd-breathe 1.4s steps(7) infinite; }
 .compact-activity { opacity: 1 !important; animation: activity-in 250ms var(--ease-out) both; }
 .compact-left.compact-activity { --from: 14px; color: #fff; }
 .compact-right.compact-activity { --from: -14px; }
@@ -166,7 +166,7 @@ h1:focus, .panel:focus { outline: none; }
 @keyframes track-in { from { opacity: 0; translate: 0 8px; filter: blur(3px); } }
 @keyframes giggle { 0% { transform: none; } 20% { transform: translateY(-12%) scale(1.1); } 40% { transform: translateY(0) scale(.96); } 60% { transform: translateY(-7%) scale(1.05); } 100% { transform: none; } }
 @keyframes tickle { 0%, 100% { transform: none; } 10%, 30%, 50%, 70% { transform: translateX(-6%) rotate(-7deg); } 20%, 40%, 60%, 80% { transform: translateX(6%) rotate(7deg); } }
-.mascot-yawn { transform-box: fill-box; transform-origin: center; animation: yawn 2.6s ease-in-out infinite; }
+.mascot-yawn { transform-box: fill-box; transform-origin: center; animation: yawn 2.6s steps(13) infinite; }
 @keyframes yawn { 0%, 100% { transform: scaleY(.85); } 50% { transform: scaleY(1.1); } }
 .panel-face { cursor: pointer; }
 
@@ -201,7 +201,7 @@ h1:focus, .panel:focus { outline: none; }
 .rec-button:hover:enabled { background: color-mix(in oklab, var(--rec) 28%, transparent); }
 .rec-button[data-counting] { min-width: 96px; justify-content: center; font-variant-numeric: tabular-nums; }
 .rec-time { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; color: var(--text); font-size: var(--fs-meta); font-weight: 600; font-variant-numeric: tabular-nums; }
-.rec-time i { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); animation: hd-breathe 1.2s ease-in-out infinite; }
+.rec-time i { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); animation: hd-breathe 1.2s steps(6) infinite; }
 .rec-time[data-paused] i { background: var(--warn); animation: none; }
 .rec-stop { color: #ff6b61 !important; }
 .prompter-pop { position: absolute; z-index: 5; right: 0; bottom: 44px; display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 12px; background: var(--surface-1); box-shadow: var(--ring), 0 12px 32px rgba(0,0,0,.5); font-size: var(--fs-meta); color: var(--text-muted); max-height: calc(100% - 48px); overflow-y: auto; animation: hd-pop 160ms var(--ease-out) both; }
@@ -262,7 +262,9 @@ h1:focus, .panel:focus { outline: none; }
 .hd-badge[data-tone=warn] { background: var(--tint-warn); color: var(--warn); }
 .hd-badge[data-tone=info] { background: var(--tint-info); color: var(--info); }
 .live-dot { position: relative; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: currentColor; animation: hd-pulse 1.6s var(--ease-out) infinite; }
+/* Animações que ficam rodando em repouso andam em degraus (steps): contínuas, obrigam o Windows a
+   recompor a janela transparente do notch a 60 fps (~20% de um núcleo só pela bolinha "ao vivo"). */
+.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: currentColor; animation: hd-pulse 1.6s steps(6) infinite; }
 @keyframes hd-pulse { from { opacity: .7; scale: 1; } to { opacity: 0; scale: 2.4; } }
 
 /* Páginas: uma ideia por página; números leves e tabulares. */
@@ -382,7 +384,7 @@ h1:focus, .panel:focus { outline: none; }
 .pref-options input[type=range] { width: 120px; }
 /* Água pendente: confirmação grande, com adiar. */
 .water-due { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 12px; row-gap: 10px; height: 100%; align-content: center; }
-.water-due-icon { color: var(--info); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--info) 60%, transparent)); animation: hd-breathe 1.6s ease-in-out infinite; }
+.water-due-icon { color: var(--info); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--info) 60%, transparent)); animation: hd-breathe 1.6s steps(8) infinite; }
 .water-due-text { display: flex; flex-direction: column; gap: 2px; }
 .water-due-text strong { font-size: 15px; font-weight: 650; }
 .water-due-text span { font-size: var(--fs-meta); color: var(--text-muted); }
@@ -391,10 +393,10 @@ h1:focus, .panel:focus { outline: none; }
 .water-snooze .chip { height: 24px; }
 /* Compacto com água pendente: gota azul pulsando e o texto ao centro. */
 .compact-water { opacity: 1 !important; color: var(--info); animation: hd-in 260ms var(--ease-out) both; }
-.compact-water svg { animation: hd-breathe 1.4s ease-in-out infinite; }
+.compact-water svg { animation: hd-breathe 1.4s steps(7) infinite; }
 .compact-water-text { position: absolute; inset: 0 60px; z-index: 2; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 650; white-space: nowrap; pointer-events: none; animation: hop 420ms var(--ease-out) both; }
 .water-pill { padding: 1px 7px; border-radius: 999px; background: var(--tint-info); color: var(--info); font-size: var(--fs-micro); font-weight: 600; }
-[data-water] .mascot-ambient { opacity: 1; background: linear-gradient(90deg, #1aa7ff, #5cc8ff 50%, #2f7bff); animation: breathe 2.4s ease-in-out infinite; }
+[data-water] .mascot-ambient { opacity: 1; background: linear-gradient(90deg, #1aa7ff, #5cc8ff 50%, #2f7bff); animation: breathe 2.4s steps(10) infinite; }
 /* Agenda: mês compacto com marcas e a lista do dia ao lado. */
 .agenda-page { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 14px; height: 100%; min-width: 0; }
 .cal { display: flex; flex-direction: column; gap: 2px; }
@@ -672,7 +674,7 @@ h1:focus, .panel:focus { outline: none; }
 .player-title { font-size: var(--fs-title); line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
 .player-meta { font-size: var(--fs-meta); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-eq { display: flex; align-items: center; gap: 2px; height: 14px; margin-right: 4px; }
-.player-eq i { width: 2.5px; height: 100%; border-radius: 2px; transform-origin: center; background: var(--text-muted); animation: eq .9s ease-in-out infinite alternate; }
+.player-eq i { width: 2.5px; height: 100%; border-radius: 2px; transform-origin: center; background: var(--text-muted); animation: eq .9s steps(4) infinite alternate; }
 .player-eq i:nth-child(2) { animation-delay: -.3s; } .player-eq i:nth-child(3) { animation-delay: -.6s; } .player-eq i:nth-child(4) { animation-delay: -.15s; }
 .player-progress { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; column-gap: 8px; font-size: var(--fs-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .player-progress span:last-child { text-align: right; }
@@ -1007,6 +1009,9 @@ html[data-view=settings], html[data-view=settings] body { background: #0e0e10 !i
 .set-theme[data-hud] { justify-content: flex-start; padding-top: 0; background: var(--theme-card); box-shadow: inset 1.5px 0 0 var(--theme-card-edge), inset -1.5px 0 0 var(--theme-card-edge), inset 0 -1.5px 0 var(--theme-card-edge); border-radius: 0 0 14px 14px; }
 .set-theme[data-hud][aria-pressed=true] { box-shadow: inset 0 0 0 2px var(--primary); }
 .set-theme-crest { width: 84px; height: 19px; object-fit: contain; margin-bottom: 18px; }
+/* Visual sem brasão: uma pílula com as cores de brilho do tema no lugar. */
+.set-theme-crest[data-swatch] { display: grid; place-items: center; }
+.set-theme-crest[data-swatch]::before { content: ""; width: 38px; height: 11px; border-radius: 999px; background: var(--swatch); box-shadow: 0 0 12px color-mix(in srgb, var(--swatch-glow) 55%, transparent); }
 .set-theme span { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .set-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .set-actions label.set-button { display: inline-flex; align-items: center; }
@@ -1121,7 +1126,7 @@ html[data-view=settings] select, html[data-view=settings] input { color-scheme: 
 .cs-note { margin: 4px 0 0; font-size: var(--fs-micro); color: var(--text-faint); text-align: center; }
 
 /* Lembrete com o mascote bravo: tudo vermelho (brilho, cartão, botão). */
-[data-water-angry] .mascot-ambient { opacity: 1; background: linear-gradient(90deg, #ff7a5c, #ff453a 50%, #c81e3a); animation: breathe 1.2s ease-in-out infinite; }
+[data-water-angry] .mascot-ambient { opacity: 1; background: linear-gradient(90deg, #ff7a5c, #ff453a 50%, #c81e3a); animation: breathe 1.2s steps(6) infinite; }
 .water-card:not(.water-thanks)[data-level="2"], .water-card:not(.water-thanks)[data-level="3"] { background: radial-gradient(120% 140% at 50% 120%, color-mix(in oklab, var(--rec) 30%, transparent), transparent 70%); }
 .water-card:not(.water-thanks)[data-level="2"] .water-yes, .water-card:not(.water-thanks)[data-level="3"] .water-yes { background: var(--rec); color: #fff; }
 .water-card:not(.water-thanks)[data-level="2"] .water-yes:hover, .water-card:not(.water-thanks)[data-level="3"] .water-yes:hover { background: color-mix(in oklab, var(--rec) 85%, white); }

@@ -219,7 +219,11 @@ export function useIsland(bridge: ShellBridge, preventAutoCollapse = false, redu
   useEffect(() => { publish(false, true); }, [publish]);
   useEffect(() => {
     const deactivated = (event: FocusEvent) => { if (event.target === window) autoCollapse(); };
-    const typed = () => { keyboard.current = true; }, pointed = () => { keyboard.current = false; };
+    // Ctrl+W/Ctrl+F4 não fecham o notch; Alt+F4 é barrado no Rust (CloseRequested).
+    const typed = (event: KeyboardEvent) => {
+      keyboard.current = true;
+      if (event.ctrlKey && (event.code === "KeyW" || event.key === "F4")) event.preventDefault();
+    }, pointed = () => { keyboard.current = false; };
     window.addEventListener("blur", deactivated);
     window.addEventListener("keydown", typed, true);
     window.addEventListener("pointerdown", pointed, true);

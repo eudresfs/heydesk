@@ -190,6 +190,10 @@ mod windows_impl {
         let Ok(listener) = UserNotificationListener::Current() else { running.store(false, Ordering::Relaxed); return };
         let mut seen: HashSet<u32> = HashSet::new();
         let mut primed = false;
+        // Cada leitura faz o Windows reinterpretar o XML de toda a central (custa CPU, mais
+        // ainda com muitas notificações). Sem evento para app não empacotado: lê a cada 4 s e,
+        // por 1 min depois de uma notificação de app escolhido (conversa em andamento), a cada 1,2 s.
+        let mut lively_until: Option<Instant> = None;
         while running.load(Ordering::Relaxed) {
             if let Ok(list) = wait!(listener.GetNotificationsAsync(NotificationKinds::Toast)) {
                 let wanted = filters.lock().map(|filters| filters.clone()).unwrap_or_default();
@@ -205,12 +209,14 @@ mod windows_impl {
                         .map(|elements| elements.into_iter().filter_map(|element| element.Text().ok().map(|text| text.to_string())).collect())
                         .unwrap_or_default();
                     let Some((source, title, body)) = shape(&wanted, &app_name, &aumid, &texts) else { continue };
+                    lively_until = Some(Instant::now() + Duration::from_secs(60));
                     let _ = app.emit(NOTIFICATION_EVENT, Notification { id, app: source, title, body });
                 }
                 // A primeira leitura só registra o que já estava na central.
                 primed = true;
             }
-            std::thread::sleep(Duration::from_millis(1200));
+            let lively = lively_until.is_some_and(|until| Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(if lively { 1200 } else { 4000 }));
         }
     }
 }

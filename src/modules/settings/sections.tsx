@@ -103,7 +103,8 @@ function ThemeGroup({ bridge, mascot, hud, onPick }: { bridge?: ShellBridge; mas
         <button type="button" className="set-option set-theme" data-hud="" aria-pressed={hud === "none"} onClick={() => onPick({ hud: "none" })} style={{ ["--theme-card" as string]: "#000", ["--theme-card-edge" as string]: "transparent" }}><i className="set-theme-crest" aria-hidden="true" /><span>Padrão</span></button>
         {huds.map(theme => <button key={theme.id} type="button" className="set-option set-theme" data-hud="" aria-pressed={hud === theme.id} disabled={Boolean(theme.error)} title={theme.error ?? theme.name} onClick={() => onPick({ hud: theme.id })}
           style={{ ["--theme-card" as string]: theme.surface ?? "#000", ["--theme-card-edge" as string]: theme.border ?? "transparent" }}>
-          {!theme.hasImages && theme.preview && <img className="set-theme-crest" src={theme.preview} alt="" />}
+          {!theme.hasImages && theme.preview ? <img className="set-theme-crest" src={theme.preview} alt="" />
+            : <i className="set-theme-crest" aria-hidden="true" data-swatch={theme.glow ? "" : undefined} style={theme.glow ? { ["--swatch" as string]: `linear-gradient(90deg, ${theme.glow.join(", ")})`, ["--swatch-glow" as string]: theme.glow[0] } : undefined} />}
           <span>{theme.name}</span>
         </button>)}
       </span>

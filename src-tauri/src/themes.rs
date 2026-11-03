@@ -48,6 +48,8 @@ pub struct ThemeCopy { #[serde(default)] pub water: Option<Vec<String>>, #[serde
 pub struct ThemeHud {
     #[serde(default)] pub surface: Option<String>, #[serde(default)] pub text: Option<String>, #[serde(default)] pub muted: Option<String>,
     #[serde(default)] pub accent: Option<String>, #[serde(default)] pub border: Option<String>,
+    /// Cor dos cartões (player, capa). Sem ela, os cartões puxam o tom de destaque.
+    #[serde(default)] pub card: Option<String>,
     #[serde(default)] pub frame: Option<String>, #[serde(default)] pub frame_slice: Option<u32>, #[serde(default)] pub panel: Option<String>,
     /// Textura repetida na superfície do notch (pedra, couro, metal).
     #[serde(default)] pub texture: Option<String>, #[serde(default)] pub texture_opacity: Option<f64>,
@@ -102,10 +104,11 @@ macro_rules! built_in {
 }
 macro_rules! sprite_theme { ($id:literal) => { built_in!($id, ["calm.svg", "happy.svg", "angry.svg", "sleepy.svg", "wide.svg"]) }; }
 macro_rules! hud_theme { ($id:literal) => { built_in!($id, ["texture.svg", "corner.svg", "crest.svg", "panel.svg"]) }; }
-const BUILT_IN: [(&str, &[(&str, &[u8])]); 9] = [
+macro_rules! plain_hud_theme { ($id:literal) => { built_in!($id, ["texture.svg", "panel.svg"]) }; }
+const BUILT_IN: [(&str, &[(&str, &[u8])]); 10] = [
     built_in!("eyes", []),
     sprite_theme!("geleu"), sprite_theme!("lunito"), sprite_theme!("taturi"), sprite_theme!("zunzum"),
-    hud_theme!("reliquia"), hud_theme!("arcano"), hud_theme!("neon"), hud_theme!("major"),
+    hud_theme!("reliquia"), hud_theme!("arcano"), hud_theme!("neon"), hud_theme!("major"), plain_hud_theme!("vidro"),
 ];
 pub fn is_built_in(id: &str) -> bool { BUILT_IN.iter().any(|(name, _)| *name == id) }
 
@@ -215,7 +218,7 @@ fn validate(manifest: &ThemeManifest, source: &Source) -> Result<Loaded, String>
         for color in all { if !is_hex(color) { return Err(format!("Cor inválida no tema: {color}.")); } }
     }
     if let Some(hud) = &manifest.hud {
-        for color in [&hud.surface, &hud.text, &hud.muted, &hud.accent, &hud.border].into_iter().flatten() {
+        for color in [&hud.surface, &hud.text, &hud.muted, &hud.accent, &hud.border, &hud.card].into_iter().flatten() {
             if !is_hex(color) { return Err(format!("Cor inválida no HUD do tema: {color}.")); }
         }
         if hud.frame_slice.is_some_and(|slice| !(1..=200).contains(&slice)) { return Err("Fatia da moldura inválida (1 a 200).".into()); }
@@ -476,7 +479,7 @@ mod tests {
         let test = TestDir::new("builtin");
         let list = Themes::new(test.0.join("themes")).list();
         let ids: Vec<&str> = list.iter().map(|theme| theme.id.as_str()).collect();
-        assert_eq!(ids, ["eyes", "geleu", "lunito", "taturi", "zunzum", "reliquia", "arcano", "neon", "major"]);
+        assert_eq!(ids, ["eyes", "geleu", "lunito", "taturi", "zunzum", "reliquia", "arcano", "neon", "major", "vidro"]);
         let relic = Themes::new(test.0.clone()).read("reliquia").unwrap();
         assert_eq!(relic.hud.len(), 4);
         assert_eq!(relic.manifest.hud.as_ref().unwrap().lines.len(), 2);
@@ -550,12 +553,15 @@ mod tests {
     fn hud_colors_and_images_are_validated_and_loaded() {
         let test = TestDir::new("hud");
         let themes = Themes::new(test.0.clone());
-        pack(&test.0.join("hud"), &manifest(r##","hud":{"surface":"#101010","text":"#ffffff","border":"#c89b3c","frame":"a.png","frameSlice":24,"panel":"a.png"}"##));
+        pack(&test.0.join("hud"), &manifest(r##","hud":{"surface":"#101010","text":"#ffffff","border":"#c89b3c","card":"#2c2c2e","frame":"a.png","frameSlice":24,"panel":"a.png"}"##));
         let bundle = themes.read("hud").unwrap();
         assert_eq!(bundle.manifest.hud.as_ref().unwrap().frame_slice, Some(24));
+        assert_eq!(bundle.manifest.hud.as_ref().unwrap().card.as_deref(), Some("#2c2c2e"));
         assert!(bundle.hud["frame"].starts_with("data:image/png;base64,") && bundle.hud.contains_key("panel"));
         pack(&test.0.join("cor"), &manifest(r##","hud":{"surface":"preto"}"##));
         assert!(themes.read("cor").unwrap_err().contains("HUD"));
+        pack(&test.0.join("cartao"), &manifest(r##","hud":{"card":"cinza"}"##));
+        assert!(themes.read("cartao").unwrap_err().contains("HUD"));
         pack(&test.0.join("fatia"), &manifest(r##","hud":{"frameSlice":0}"##));
         assert!(themes.read("fatia").unwrap_err().contains("Fatia"));
         pack(&test.0.join("falta"), &manifest(r##","hud":{"panel":"nada.png"}"##));

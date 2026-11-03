@@ -517,15 +517,8 @@ pub fn run() {
                     if let Err(error) = shell::place_island(&webview) { eprintln!("[Heydesk] Falha ao reposicionar a ilha: {error}"); }
                 }
             }
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                if let Err(error) = window.hide() {
-                    eprintln!("[Heydesk] Falha ao ocultar a janela: {error}");
-                }
-                if let Err(error) = window.emit(shell::SHELL_HIDDEN_EVENT, ()) {
-                    eprintln!("[Heydesk] Falha ao recolher a ilha: {error}");
-                }
-            }
+            // Alt+F4 e afins não fecham nem somem com o notch; ocultar fica na bandeja e Encerrar sai.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event { api.prevent_close(); }
         })
         .run(tauri::generate_context!())
         .expect("Não foi possível executar o Heydesk");

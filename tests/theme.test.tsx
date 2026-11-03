@@ -86,6 +86,10 @@ test("HUD do tema vira variáveis CSS do notch; sem HUD nada muda", () => {
   assert.equal(vars["--hud-slice"], "24");
   assert.equal(hudStyle({ muted: "#999999", frameSlice: 16 })["--text-muted"], "#999999");
   assert.equal(hudStyle({ frameSlice: 16 })["--hud-frame"], undefined);
+  const neutral = hudStyle({ surface: "#1c1c1e", accent: "#0a84ff", card: "#2c2c2e", frameSlice: 16 });
+  assert.equal(neutral["--card-a"], "#2c2c2e", "cor de cartão tira o tom de destaque");
+  assert.doesNotMatch(neutral["--art-bg"], /#0a84ff/);
+  assert.doesNotMatch(neutral["--art-ring"], /#0a84ff/);
 });
 
 test("som do tema toca o arquivo no lugar da melodia", () => {

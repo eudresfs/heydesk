@@ -38,7 +38,7 @@ export interface ThemeManifest {
   colors?: { ground?: string | null; accent?: string | null; text?: string | null; glow?: [string, string, string] | null } | null;
   copy?: { water?: string[] | null; mapFor?: string | null } | null;
   /** Visual do notch: cores, borda, moldura do painel aberto e imagem de fundo. */
-  hud?: { surface?: string | null; text?: string | null; muted?: string | null; accent?: string | null; border?: string | null; frame?: string | null; frameSlice?: number | null; panel?: string | null;
+  hud?: { surface?: string | null; text?: string | null; muted?: string | null; accent?: string | null; border?: string | null; card?: string | null; frame?: string | null; frameSlice?: number | null; panel?: string | null;
     texture?: string | null; textureOpacity?: number | null; corner?: string | null; crest?: string | null; bevel?: boolean | null; shimmer?: boolean | null; panelOpacity?: number | null;
     lines?: { color: string; inset: number; width: number; glow?: boolean }[] } | null;
 }

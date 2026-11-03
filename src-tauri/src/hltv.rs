@@ -234,6 +234,12 @@ fn status(app: &AppHandle, game_id: &str, state: &str) {
 
 fn close(app: &AppHandle, label: &str) { if let Some(window) = app.get_webview_window(label) { let _ = window.destroy(); } }
 
+/// Os três primeiros são os padrões do Tauri, que somem quando há argumentos próprios. Janela
+/// invisível: sem GPU (~115 MB a menos).
+const HLTV_BROWSER_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --mute-audio --blink-settings=imagesEnabled=false \
+    --disable-gpu --disable-software-rasterizer --disable-background-networking --disable-component-update \
+    --host-resolver-rules=\"MAP * ~NOTFOUND, EXCLUDE hltv.org, EXCLUDE *.hltv.org, EXCLUDE challenges.cloudflare.com\"";
+
 fn open(app: &AppHandle, label: &'static str, url: &str) {
     let Ok(parsed) = url.parse() else { return };
     let app = app.clone();
@@ -241,7 +247,11 @@ fn open(app: &AppHandle, label: &'static str, url: &str) {
     tauri::async_runtime::spawn(async move {
         // Presa ao hltv.org: anúncio ou redirect não leva a janela invisível para outro site,
         // e pop-ups são recusados.
-        let built = WebviewWindowBuilder::new(&app, label, WebviewUrl::External(parsed))
+        let mut builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::External(parsed));
+        // Perfil próprio que só resolve hltv.org e o Cloudflare: sem as dezenas de iframes de
+        // anúncio (cada um um processo, >1 GB juntos), sem imagens e sem som.
+        if let Ok(dir) = app.path().app_local_data_dir() { builder = builder.data_directory(dir.join("hltv")).additional_browser_args(HLTV_BROWSER_ARGS); }
+        let built = builder
             .title("HLTV").visible(false).skip_taskbar(true).focused(false).inner_size(1100.0, 900.0)
             .initialization_script(SCRIPT)
             .on_navigation(|url| url.scheme() == "https" && url.host_str() == Some("www.hltv.org"))
@@ -290,10 +300,11 @@ const SCRIPT: &str = r##"
     return { name: words.join(" "), provider: box.dataset.streamProvider || "", country: box.querySelector("img.flag, img[class*=flag]")?.getAttribute("title") || "", viewers, embed: embedBox?.getAttribute("data-stream-embed") || "" };
   }).filter(stream => stream.embed && /^https:\/\/(www\.youtube\.com|player\.twitch\.tv|player\.kick\.com)\//.test(stream.embed));
   // Mapas da série: nome, placar final e vencedor (lado esquerdo = time 1 = mandante).
-  const maps = () => [...document.querySelectorAll(".mapholder")].map(holder => {
+  // O veto simulado do HLTV ("Ancient - 54%") também usa .mapholder: fica de fora.
+  const maps = () => [...document.querySelectorAll(".mapholder")].filter(holder => !holder.closest(".simulated-veto-only")).map(holder => {
     const scores = [...holder.querySelectorAll(".results-team-score")].map(e => parseInt(e.textContent.trim()));
     const left = holder.querySelector(".results-left")?.classList;
-    return { name: holder.querySelector(".mapname")?.textContent.trim() || "", home: Number.isFinite(scores[0]) ? scores[0] : null, away: Number.isFinite(scores[1]) ? scores[1] : null,
+    return { name: (holder.querySelector(".mapname")?.textContent.trim() || "").replace(/\s*-\s*\d+%$/, ""), home: Number.isFinite(scores[0]) ? scores[0] : null, away: Number.isFinite(scores[1]) ? scores[1] : null,
       winner: left?.contains("won") ? "home" : left?.contains("lost") ? "away" : "" };
   }).filter(map => map.name && !/^tba$/i.test(map.name));
   const score = () => {

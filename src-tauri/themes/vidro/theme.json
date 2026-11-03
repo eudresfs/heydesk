@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "name": "Vidro",
+  "author": "Heydesk",
+  "colors": {
+    "glow": [
+      "#0a84ff",
+      "#5e5ce6",
+      "#64d2ff"
+    ]
+  },
+  "hud": {
+    "surface": "#1c1c1e",
+    "text": "#f5f5f7",
+    "muted": "#a1a1a6",
+    "accent": "#0a84ff",
+    "border": "#48484a",
+    "card": "#2c2c2e",
+    "textureOpacity": 0.35,
+    "panelOpacity": 0.9,
+    "bevel": false,
+    "shimmer": false,
+    "lines": [
+      {
+        "color": "#4a4a4e",
+        "inset": 1,
+        "width": 0.6
+      }
+    ],
+    "texture": "texture.svg",
+    "panel": "panel.svg"
+  }
+}

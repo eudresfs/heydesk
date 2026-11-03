@@ -69,7 +69,7 @@ function SeriesMaps({ live, rounds }: { live: CsLive; rounds: { home: number; aw
     <span className="map-name">{map.name}</span>
     {map.winner ? <span className="map-score"><b data-win={map.winner === "home" || undefined}>{map.home ?? "–"}</b>–<b data-win={map.winner === "away" || undefined}>{map.away ?? "–"}</b></span>
       : index === current ? <span className="map-live"><span className="live-dot" />{rounds ? `${rounds.home}–${rounds.away}` : "ao vivo"}</span>
-      : <span className="map-pending">a jogar</span>}
+      : null}
   </div>)}</div>;
 }
 
@@ -93,7 +93,7 @@ function Scoreboard({ game, onPin, live, note, onWatch }: { game: SportGame; onP
       <span className="map-name">{map.name ?? (map.result === "live" && live?.gameId === game.id && live.map && !csFinished(live) ? live.map : csFinishedMap(game, index)?.name || `Mapa ${index + 1}`)}</span>
       {map.result === "live" ? <span className="map-live"><span className="live-dot" />{liveScore(game, map, live) ?? (map.homeRounds != null && map.awayRounds != null ? `${map.homeRounds}–${map.awayRounds}` : "ao vivo")}</span>
         : map.homeRounds != null && map.awayRounds != null ? <span className="map-score"><b data-win={map.result === "home" || undefined}>{map.homeRounds}</b>–<b data-win={map.result === "away" || undefined}>{map.awayRounds}</b></span>
-        : map.result === "pending" ? <span className="map-pending">a jogar</span>
+        : map.result === "pending" ? null
         : map.result === "done" ? (final => final ? <span className="map-score"><b data-win={final.home > final.away || undefined}>{final.home}</b>–<b data-win={final.away > final.home || undefined}>{final.away}</b></span> : <span className="map-pending">encerrado</span>)(csFinishedMap(game, index)) : <span className="map-score">{map.result === "home" ? game.home.short : game.away.short}</span>}
     </div>)}</div>}
   </div>;

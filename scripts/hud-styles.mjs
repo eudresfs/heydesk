@@ -104,6 +104,23 @@ const styles = {
 <rect width="680" height="300" fill="url(#a)"/>${beams}${confetti}`);
     },
   },
+  // Vidro fosco no espírito do macOS/iOS: cinza grafite, borda fina, azul de sistema e
+  // reflexos coloridos desfocados. Sem joias nem brasão; nenhuma marca ou ícone da Apple.
+  vidro: {
+    name: "Vidro",
+    hud: { surface: "#1c1c1e", text: "#f5f5f7", muted: "#a1a1a6", accent: "#0a84ff", border: "#48484a", card: "#2c2c2e", textureOpacity: .35, panelOpacity: .9, bevel: false, shimmer: false,
+      lines: [{ color: "#4a4a4e", inset: 1, width: .6 }] },
+    glow: ["#0a84ff", "#5e5ce6", "#64d2ff"],
+    // Só o grão fino do vidro fosco, sem veios.
+    texture: () => noise("#1c1c1e", [.11, .11, .12], { freq: .9, octaves: 1, alpha: .12, grain: .05, seed: 31 }),
+    panel: () => {
+      const blob = (cx, cy, r, color, o) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}" opacity="${o}"/>`;
+      return svg(680, 300, `<defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="60"/></filter>
+<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".07"/><stop offset=".35" stop-color="#fff" stop-opacity="0"/></linearGradient></defs>
+<g filter="url(#b)">${blob(170, 10, 120, "#0a84ff", .32)}${blob(470, -10, 140, "#5e5ce6", .28)}${blob(600, 200, 110, "#64d2ff", .14)}${blob(60, 260, 100, "#bf5af2", .12)}</g>
+<rect width="680" height="300" fill="url(#sheen)"/>`);
+    },
+  },
 };
 
 const root = join(import.meta.dirname, "..", "src-tauri", "themes");
@@ -111,11 +128,13 @@ for (const [id, style] of Object.entries(styles)) {
   const dir = join(root, id);
   mkdirSync(dir, { recursive: true });
   rmSync(join(dir, "frame.svg"), { force: true });
-  for (const part of ["texture", "corner", "crest", "panel"]) writeFileSync(join(dir, `${part}.svg`), style[part]());
+  const parts = ["texture", "corner", "crest", "panel"].filter(part => style[part]);
+  for (const part of ["corner", "crest"]) if (!style[part]) rmSync(join(dir, `${part}.svg`), { force: true });
+  for (const part of parts) writeFileSync(join(dir, `${part}.svg`), style[part]());
   writeFileSync(join(dir, "theme.json"), JSON.stringify({
     schema: 1, name: style.name, author: "Heydesk",
     colors: { glow: style.glow },
-    hud: { ...style.hud, texture: "texture.svg", corner: "corner.svg", crest: "crest.svg", panel: "panel.svg" },
+    hud: { ...style.hud, ...Object.fromEntries(parts.map(part => [part, `${part}.svg`])) },
   }, null, 2) + "\n");
 }
 console.log("estilos de HUD gerados em", root);
