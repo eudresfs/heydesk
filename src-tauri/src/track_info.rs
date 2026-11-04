@@ -37,16 +37,32 @@ fn plain(text: &str) -> String {
     base.chars().filter(|ch| ch.is_alphanumeric() || ch.is_whitespace()).collect::<String>().to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Mesma música e mesmo artista; entre as versões, a de duração mais próxima e, empatando, a mais antiga
-/// (o álbum original em vez de coletânea ou reedição).
+/// Artista principal: "A & B", "A, B" e "A feat. B" contam como A.
+fn main_artist(name: &str) -> String {
+    let lower = name.to_lowercase();
+    let cut = [" & ", ", ", " feat. ", " feat ", " ft. ", " x "].iter().filter_map(|sep| lower.find(sep)).min().unwrap_or(lower.len());
+    plain(&lower[..cut])
+}
+
+/// Mesma música do mesmo artista (tributos e "Calm Down Oasis" ficam de fora). Entre as versões, a de
+/// duração mais próxima, evitando ao vivo, remaster, coletânea, single e EP. As datas do iTunes não
+/// servem para desempate: coletâneas aparecem com o ano da faixa original.
 pub(crate) fn best(songs: Vec<Song>, title: &str, artist: &str, duration_ms: Option<u64>) -> Option<Song> {
-    let (title, artist) = (plain(title), plain(artist));
+    let (title, artist) = (plain(title), main_artist(artist));
     if title.is_empty() { return None; }
     let gap = |song: &Song| match (duration_ms, song.track_time_millis) { (Some(a), Some(b)) => a.abs_diff(b) / 1000, _ => 0 };
+    let penalty = |song: &Song| {
+        let album = song.collection_name.as_deref().unwrap_or_default().to_lowercase();
+        let mut score = gap(song);
+        if song.track_name.contains(['(', '[']) { score += 3; }
+        if album.ends_with(" - single") || album.ends_with(" - ep") { score += 2; }
+        if ["deluxe", "remaster", "edition", "live", "best of", "greatest", "hits", "collection", "anthology", "essential"].iter().any(|word| album.contains(word)) { score += 3; }
+        score
+    };
     songs.into_iter()
-        .filter(|song| plain(&song.track_name) == title && (artist.is_empty() || plain(&song.artist_name).contains(&artist) || artist.contains(&plain(&song.artist_name))))
+        .filter(|song| plain(&song.track_name) == title && (artist.is_empty() || main_artist(&song.artist_name) == artist))
         .filter(|song| gap(song) <= 15)
-        .min_by(|a, b| (gap(a) > 6).cmp(&(gap(b) > 6)).then(a.release_date.cmp(&b.release_date)))
+        .min_by_key(|song| penalty(song))
 }
 
 fn year(date: &str) -> Option<u32> { date.get(..4)?.parse().ok().filter(|year| (1900..=2100).contains(year)) }
@@ -95,17 +111,24 @@ mod tests {
         Song { track_name: name.into(), artist_name: artist.into(), collection_name: Some(album.into()), release_date: Some(date.into()), primary_genre_name: None, artwork_url100: None, track_time_millis: Some(ms) }
     }
     #[test]
-    fn picks_same_song_closest_duration_then_oldest() {
+    fn picks_original_album_of_same_artist() {
         let songs = vec![
             song("Running Alone (Live)", "Angra", "Live", "2003-01-01", 445_000),
-            song("Running Alone", "Angra", "Coletânea", "2010-01-01", 434_000),
+            song("Running Alone", "Angra", "The Best of Angra", "2010-01-01", 434_000),
             song("Running Alone", "Angra", "Rebirth", "2001-11-01", 436_000),
             song("Running Alone", "Outro", "X", "1990-01-01", 434_000),
+            song("Running Alone", "Calm Down Angra", "Y", "1980-01-01", 434_000),
             song("Carry On", "Angra", "Angels Cry", "1993-01-01", 434_000),
         ];
-        let best = best(songs, "Running Alone", "Angra", Some(434_000)).unwrap();
-        assert_eq!(best.collection_name.as_deref(), Some("Rebirth"));
+        let rebirth = best(songs, "Running Alone", "Angra", Some(434_000)).unwrap();
+        assert_eq!(rebirth.collection_name.as_deref(), Some("Rebirth"));
         assert_eq!(year("2001-11-01T08:00:00Z"), Some(2001));
+        let oasis = vec![
+            song("Stand By Me", "Oasis", "Stand By Me - EP", "1987-08-21", 356_627),
+            song("Stand By Me", "Oasis", "Time Flies...1994-2009", "1987-08-21", 359_480),
+            song("Stand By Me", "Oasis", "Be Here Now", "1997-08-21", 356_627),
+        ];
+        assert_eq!(best(oasis, "Stand by Me", "Oasis", Some(357_000)).unwrap().collection_name.as_deref(), Some("Be Here Now"));
     }
     #[test]
     fn rejects_far_duration_and_empty_title() {

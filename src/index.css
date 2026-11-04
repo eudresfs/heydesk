@@ -711,6 +711,15 @@ h1:focus, .panel:focus { outline: none; }
 [data-glass] .player-page:not(.lyrics-mode) .player-progress { grid-area: progress; }
 [data-glass] .player-page:not(.lyrics-mode) .player-actions { grid-area: lyrics; }
 [data-glass] .player-page:not(.lyrics-mode) .player-failure { grid-area: progress; align-self: end; }
+.lyrics-mode .player-deck { display: none; }
+/* Vidro com letra: o toca-discos fica atrás, à direita e maior; letra e rodapé ocupam a largura toda por cima. */
+[data-glass] .player-page.lyrics-mode { position: relative; }
+[data-glass] .lyrics-mode .lyrics-head .player-cover { display: none; }
+[data-glass] .lyrics-mode .lyrics-head .player-meta b { flex: 0 1 auto; max-width: none; }
+[data-glass] .lyrics-mode .lyrics-head, [data-glass] .lyrics-mode .lyrics, [data-glass] .lyrics-mode .lyrics-footer { position: relative; z-index: 1; }
+[data-glass] .lyrics-mode .lyrics, [data-glass] .lyrics-mode .lyrics-head { padding-left: 0; padding-right: 200px; }
+/* A parte de baixo do disco some em degradê: tempo e controles continuam legíveis por cima. */
+[data-glass] .lyrics-mode .player-deck { position: absolute; right: 8px; top: -4px; z-index: 0; zoom: 1.12; opacity: .9; pointer-events: none; mask-image: linear-gradient(180deg, #000 45%, transparent 92%); }
 [data-glass] .player-deck { grid-area: deck; align-self: center; position: relative; display: block; width: 180px; height: 108px; }
 [data-glass] .player-deck .player-cover { position: absolute; left: 0; top: 2px; z-index: 2; width: 104px; height: 104px; border-radius: 7px; box-shadow: 0 0 0 1px rgba(255,255,255,.08), 6px 0 14px -4px rgba(0,0,0,.7); }
 [data-glass] .vinyl { display: block; position: absolute; left: 6px; top: 6px; z-index: 1; width: 96px; height: 96px; border-radius: 50%; transition: translate 700ms var(--ease-out); }
@@ -734,7 +743,11 @@ h1:focus, .panel:focus { outline: none; }
 /* Vidro: capa da faixa desfocada atrás do player, acende junto com a abertura. */
 .island-cover { opacity: 0; transition: opacity 400ms var(--ease-out); }
 .island-cover image { filter: blur(28px) saturate(1.3) brightness(.42); transform: scale(1.25); transform-box: fill-box; transform-origin: center; }
-.island-cover[data-on] { opacity: var(--hud-p, 0); }
+.island-cover[data-on=open] { opacity: var(--hud-p, 0); }
+/* Compacto com música: a capa desfocada substitui o brilho amarelo. */
+.island-cover[data-on=compact] { opacity: 1; }
+.island-cover[data-on=compact] image { filter: blur(14px) saturate(1.5) brightness(.6); }
+[data-glass][data-cover][data-music] .mascot-ambient { opacity: 0; }
 /* Aviso de faixa: capa à esquerda, música e artista no centro, equalizador à direita. */
 .compact-cover { width: 20px; height: 20px; border-radius: 5px; overflow: hidden; display: grid; place-items: center; background: rgba(255,255,255,.1); animation: track-in 250ms var(--ease-out) 200ms both; }
 .compact-cover img { width: 100%; height: 100%; object-fit: cover; }

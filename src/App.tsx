@@ -247,7 +247,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   // Capa da faixa: aviso de música nova e, no tema Vidro, fundo desfocado do player.
   const mediaOn = Boolean(settings.saved.modules.media && (desktop?.media?.state === "playing" || desktop?.media?.state === "paused"));
   const trackInfo = useTrackInfo(bridge, mediaOn ? desktop?.media : null, false);
-  const artUrl = bestArt(desktop?.media, useMediaArt(bridge, mediaOn ? desktop?.media?.artKey : null), trackInfo);
+  const artUrl = bestArt(useMediaArt(bridge, mediaOn ? desktop?.media?.artKey : null), trackInfo);
   const glassArt = theme.id.endsWith("|vidro") && !majorLive;
   // Jogo ao vivo de time seguido fica no compacto enquanto durar (atividades passam por cima).
   const liveGame = !island.hidden ? sports.snapshot?.games.find(game => game.state === "in" && game.followed) ?? null : null;
@@ -489,7 +489,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     return () => window.clearTimeout(timer);
   }, [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (card) lastCard.current = card;
-  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-glass={glassArt || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow || leavingCard)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
+  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-glass={glassArt || undefined} data-cover={(glassArt && artUrl) || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow || leavingCard)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
     onMouseMove={island.pointerMove} onMouseLeave={island.pointerLeave}
     onBlurCapture={event => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
@@ -541,7 +541,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {theme.hud?.texture && <path className="island-texture" data-notch-path="" />}
       {theme.hud?.panel && <image className="island-art" data-notch-box="" href={theme.hud.panel} preserveAspectRatio="xMidYMin slice" clipPath="url(#hud-clip)" />}
       {/* Vidro: capa da faixa desfocada atrás do player (fica montada para já ter o tamanho do notch). */}
-      {glassArt && <g className="island-cover" clipPath="url(#hud-clip)" data-on={(island.expanded && page === "media" && artUrl) ? "" : undefined}><image data-notch-box="" href={artUrl ?? ""} preserveAspectRatio="xMidYMid slice" /></g>}
+      {glassArt && <g className="island-cover" clipPath="url(#hud-clip)" data-on={!artUrl ? undefined : island.expanded ? (page === "media" ? "open" : undefined) : (trackShow || singing) ? "compact" : undefined}><image data-notch-box="" href={artUrl ?? ""} preserveAspectRatio="xMidYMid slice" /></g>}
       {theme.hud?.bevel && <path className="island-bevel" data-notch-path="" clipPath="url(#hud-clip)" />}
       {theme.hud?.lines.map((line, index) => <g key={index} className="island-line" data-index={index} clipPath="url(#hud-clip)" style={{ filter: line.glow ? `drop-shadow(0 0 2.5px ${line.color})` : "drop-shadow(0 1px 0 rgba(0,0,0,.75))" }}>
         <path data-notch-edge="" mask={`url(#hud-line-${index})`} style={{ fill: "none", stroke: line.color, strokeWidth: (line.inset + line.width) * 2 }} />
