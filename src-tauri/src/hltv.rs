@@ -20,6 +20,10 @@ pub const STATUS_EVENT: &str = "hltv:status";
 const LIST_URL: &str = "https://www.hltv.org/matches";
 const RELOAD: Duration = Duration::from_secs(10 * 60);
 const BACKOFF: Duration = Duration::from_secs(30 * 60);
+/// A página da partida congela (placar e mapas param na hora em que abriu): recarrega de tempos em tempos
+/// e logo que a série andar mais que os mapas vistos nela.
+const MATCH_RELOAD: Duration = Duration::from_secs(5 * 60);
+const MATCH_RETRY: Duration = Duration::from_secs(90);
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -66,7 +70,7 @@ pub struct ListedMatch {
 pub enum Report { Schedule { matches: Vec<ListedMatch> }, Score { score: LiveRounds }, Blocked, Over }
 
 #[derive(Default)]
-struct State { schedule: Vec<Game>, loaded_at: Option<Instant>, game: Option<String>, last: Option<LiveRounds>, blocked_until: Option<Instant> }
+struct State { schedule: Vec<Game>, loaded_at: Option<Instant>, game: Option<String>, match_at: Option<Instant>, last: Option<LiveRounds>, blocked_until: Option<Instant> }
 
 #[derive(Default)]
 pub struct Hltv { state: Mutex<State>, pinned: Mutex<Option<String>>, status: Mutex<Option<serde_json::Value>> }
@@ -129,7 +133,7 @@ impl Hltv {
 
     /// A cada 20 s: mantém a lista aberta se CS2 estiver escolhido e a página da partida
     /// acompanhada ao vivo aberta enquanto ela durar.
-    fn tick(&self, app: &AppHandle, enabled: bool, live: Option<String>) {
+    fn tick(&self, app: &AppHandle, enabled: bool, live: Option<(String, u32)>) {
         let Ok(mut state) = self.state.lock() else { return };
         if state.blocked_until.is_some_and(|until| Instant::now() < until) { return; }
         if !enabled {
@@ -147,11 +151,19 @@ impl Hltv {
         // Partida acompanhada: página própria para os rounds.
         match live {
             None => if state.game.take().is_some() { close(app, MATCH); state.last = None; let _ = app.emit(LIVE_EVENT, Option::<LiveRounds>::None); },
-            Some(game) => {
-                if state.game.as_deref() == Some(game.as_str()) && app.get_webview_window(MATCH).is_some() { return; }
+            Some((game, decided)) => {
+                if let Some(window) = app.get_webview_window(MATCH).filter(|_| state.game.as_deref() == Some(game.as_str())) {
+                    let age = state.match_at.map_or(MATCH_RELOAD, |at| at.elapsed());
+                    let seen = state.last.as_ref().map_or(decided, |last| last.maps.iter().filter(|map| !map.winner.is_empty()).count() as u32);
+                    if age >= MATCH_RELOAD || (seen < decided && age >= MATCH_RETRY) {
+                        state.match_at = Some(Instant::now());
+                        if let Ok(url) = window.url() { let _ = window.navigate(url); }
+                    }
+                    return;
+                }
                 let id = game.rsplit('|').next().unwrap_or_default().to_string();
                 status(app, &game, "searching");
-                state.game = Some(game); state.last = None;
+                state.game = Some(game); state.last = None; state.match_at = Some(Instant::now());
                 close(app, MATCH);
                 open(app, MATCH, &format!("https://www.hltv.org/matches/{id}/-"));
             }
@@ -198,7 +210,7 @@ pub fn watch(app: AppHandle) {
         let pinned = hltv.pinned();
         let live = sports.snapshot().games.into_iter()
             .find(|game| game.league == LEAGUE && game.state == "in" && (game.followed || pinned.as_deref() == Some(game.id.as_str())))
-            .map(|game| game.id);
+            .map(|game| { let maps = |side: &crate::sports::Side| side.score.as_deref().and_then(|score| score.parse::<u32>().ok()).unwrap_or(0); let decided = maps(&game.home) + maps(&game.away); (game.id, decided) });
         hltv.tick(&app, enabled, live);
         std::thread::sleep(Duration::from_secs(20));
     });
