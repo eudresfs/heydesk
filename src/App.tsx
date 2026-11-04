@@ -4,7 +4,7 @@ import { useIsland } from "./hooks/useIsland";
 import { useSettings } from "./hooks/useSettings";
 import { useReducedMotion } from "./hooks/useReducedMotion";
 import { useContextSnapshots } from "./modules/context/useContext";
-import { ContextPages, orderPages, pageNames, quotaLow, useLyricIndex, useLyrics, useNow, type ContextPage, weatherLabel } from "./modules/context/ContextPages";
+import { ContextPages, orderPages, pageNames, quotaLow, useLyricIndex, useLyrics, useMediaArt, useNow, useTrackInfo, bestArt, type ContextPage, weatherLabel } from "./modules/context/ContextPages";
 import { useLyricsOn } from "./modules/context/lyricsStore";
 import { Mascot, type MascotExpression } from "./modules/context/Mascot";
 import { useMascotPresence } from "./modules/context/useMascotPresence";
@@ -244,6 +244,11 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const lyricLines = lyrics?.state === "synced" ? lyrics.lines : [];
   const lyricAt = useLyricIndex(lyricLines, media, Boolean(lyricsOn && lyricLines.length && !island.expanded));
   const lyricLine = lyricAt >= 0 ? lyricLines[lyricAt].text || "♪" : null;
+  // Capa da faixa: aviso de música nova e, no tema Vidro, fundo desfocado do player.
+  const mediaOn = Boolean(settings.saved.modules.media && (desktop?.media?.state === "playing" || desktop?.media?.state === "paused"));
+  const trackInfo = useTrackInfo(bridge, mediaOn ? desktop?.media : null, false);
+  const artUrl = bestArt(desktop?.media, useMediaArt(bridge, mediaOn ? desktop?.media?.artKey : null), trackInfo);
+  const glassArt = theme.id.endsWith("|vidro") && !majorLive;
   // Jogo ao vivo de time seguido fica no compacto enquanto durar (atividades passam por cima).
   const liveGame = !island.hidden ? sports.snapshot?.games.find(game => game.state === "in" && game.followed) ?? null : null;
   // Transmissão em PiP (Configurações › Esportes): abre sozinha, uma vez por jogo, quando o
@@ -484,7 +489,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
     return () => window.clearTimeout(timer);
   }, [cardKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (card) lastCard.current = card;
-  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow || leavingCard)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
+  return <main className={`shell ${bridge.desktop ? "desktop" : "preview"} ${island.expanded ? "expanded" : "compact"} ${island.peeking ? "peeking" : ""}`} style={style} data-prompter={(page === "prompter" && island.expanded) || undefined} data-away={away || undefined} data-hud={theme.hud ? "" : undefined} data-glass={glassArt || undefined} data-reduced-motion={reducedMotion} data-mascot-phase={activity || liveGame || singing || waterShow ? "context" : presence.phase} data-water={waterShow ? "" : undefined} data-water-angry={waterAngry || undefined} data-water-card={(!island.expanded && !toast && !countShow && (thanksShow || (waterShow && waterNow?.due) || updateShow || leavingCard)) || undefined} data-music={trackShow || singing ? "" : undefined} data-toast={toastShown || waterShow || countShow ? "" : undefined} data-rec={recShow && !countShow && !waterShow ? "" : undefined} data-live={!activity && liveGame ? "" : undefined} data-activity={activity?.kind} data-hidden={island.hidden} aria-hidden={island.hidden || undefined}
     onMouseMove={island.pointerMove} onMouseLeave={island.pointerLeave}
     onBlurCapture={event => {
       if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return;
@@ -535,6 +540,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       <path data-notch-path="" />
       {theme.hud?.texture && <path className="island-texture" data-notch-path="" />}
       {theme.hud?.panel && <image className="island-art" data-notch-box="" href={theme.hud.panel} preserveAspectRatio="xMidYMin slice" clipPath="url(#hud-clip)" />}
+      {/* Vidro: capa da faixa desfocada atrás do player (fica montada para já ter o tamanho do notch). */}
+      {glassArt && <g className="island-cover" clipPath="url(#hud-clip)" data-on={(island.expanded && page === "media" && artUrl) ? "" : undefined}><image data-notch-box="" href={artUrl ?? ""} preserveAspectRatio="xMidYMid slice" /></g>}
       {theme.hud?.bevel && <path className="island-bevel" data-notch-path="" clipPath="url(#hud-clip)" />}
       {theme.hud?.lines.map((line, index) => <g key={index} className="island-line" data-index={index} clipPath="url(#hud-clip)" style={{ filter: line.glow ? `drop-shadow(0 0 2.5px ${line.color})` : "drop-shadow(0 1px 0 rgba(0,0,0,.75))" }}>
         <path data-notch-edge="" mask={`url(#hud-line-${index})`} style={{ fill: "none", stroke: line.color, strokeWidth: (line.inset + line.width) * 2 }} />
@@ -583,7 +590,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {recShow && !countShow && !waterShow && <span className="rec-compact" data-paused={recorder.state.state === "paused" || undefined}><i />{recorder.state.state === "paused" ? "Pausado" : "REC"}<b>{recClock(recordedMs(recorder.state, recNow))}</b></span>}
       {waterShow ? <span className="compact-side compact-left compact-water" key={`w${waterPulse}`}><ActivityIcon icon="drop" /></span>
         : !activity && liveGame ? <span className="compact-side compact-left compact-live"><span className="live-dot" /></span>
-        : trackShow || singing ? <span className="compact-side compact-left">{singing && <span className="compact-media small" aria-hidden="true"><i /><i /><i /></span>}</span>
+        : trackShow ? <span className="compact-side compact-left compact-cover" key={`cover-${trackShow.id}`} aria-hidden="true">{artUrl ? <img src={artUrl} alt="" /> : <ActivityIcon icon="note" />}</span>
+        : singing ? <span className="compact-side compact-left"><span className="compact-media small" aria-hidden="true"><i /><i /><i /></span></span>
         : activity ? <span className="compact-side compact-left compact-activity" key={`icon-${activity.id}`} data-tone={activity.tone} title={activity.label}><ActivityIcon icon={activity.icon} /></span>
         : <span className="compact-side compact-left"><time>{clock}</time></span>}
       {/* Jogo ao vivo: o placar ocupa o centro; o mascote sai de cena. */}
@@ -597,10 +605,11 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {/* Faixa nova: o mascote fica montado e sai pelo topo (reação "away"); sem reações, sai de cena. */}
       {!activity && (liveGame || waterShow) ? null : singing || trackShow && !mascotPrefs.reactions ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} follow={mascotLook ? undefined : compactFollow} shape={mascotPrefs.eyeShape} color={petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : trackShow ? { kind: "away", key: trackShow.id } : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
       {singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
-      {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.label} — ${trackShow.value}`}><b>{trackShow.label}</b><span>{trackShow.value}</span></span>}
+      {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.value} — ${trackShow.label}`}><b>{trackShow.value}</b><span>{trackShow.label}</span></span>}
       {waterShow ? <span className="compact-side compact-right compact-water"><span className="water-pill">abrir</span></span>
         : !activity && liveGame ? <span className="compact-side compact-right compact-live"><span className="live-map">{(rounds => rounds ? <>{rounds.map}{liveGame.maps && liveGame.maps.length > 1 && <small>{liveGame.home.score ?? 0}–{liveGame.away.score ?? 0}</small>}</> : liveGame.clock ?? liveGame.detail)(csMapScore(liveGame, sports.csLive))}</span></span>
-        : trackShow || singing ? <span className="compact-side compact-right" />
+        : trackShow ? <span className="compact-side compact-right"><span className="compact-media" aria-hidden="true"><i /><i /><i /><i /><i /></span></span>
+        : singing ? <span className="compact-side compact-right" />
         : activity ? <span className="compact-side compact-right compact-activity" key={`value-${activity.id}`} data-tone={activity.tone}>{activity.meter != null && <span className="compact-meter"><i style={{ transform: `scaleX(${activity.meter / 100})` }} /></span>}<span className="compact-activity-value">{activity.kind === "message" || activity.kind === "agenda" ? <><b>{activity.label}</b> {activity.value}</> : activity.value}</span></span>
         : <span className="compact-side compact-right">
         {playing ? <span className="compact-media" aria-label="Música tocando"><i /><i /><i /><i /><i /></span>

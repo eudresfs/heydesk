@@ -115,8 +115,10 @@ fn current_session(cancelled: &impl Fn() -> bool) -> Option<Option<Session>> {
     }
 }
 
-/// Capa publicada pelo app de mídia, como data URL; lida só quando a faixa muda.
-static ART: std::sync::Mutex<(String, Option<String>)> = std::sync::Mutex::new((String::new(), None));
+/// Capa publicada pelo app de mídia, como data URL. Lida quando a faixa muda e relida nos primeiros
+/// segundos: o Chrome publica título antes da arte e, no começo, a capa é o ícone do navegador.
+static ART: std::sync::Mutex<(String, Option<String>, Option<std::time::Instant>)> = std::sync::Mutex::new((String::new(), None, None));
+const ART_SETTLE: std::time::Duration = std::time::Duration::from_secs(10);
 const MAX_ART: u32 = 768 * 1024;
 
 pub(super) fn media_art() -> Option<String> { ART.lock().ok().and_then(|art| art.1.clone()) }
@@ -170,12 +172,17 @@ fn read_media(cancelled: impl Fn() -> bool) -> Option<MediaStatus> {
     status.source = session.SourceAppUserModelId().ok().and_then(|id| source_name(&id.to_string()));
     // Capa: relida só quando título/artista/app mudam.
     let key = format!("{}|{}|{}", status.title.as_deref().unwrap_or(""), status.artist.as_deref().unwrap_or(""), status.source.as_deref().unwrap_or(""));
-    let stale = ART.lock().map(|art| art.0 != key).unwrap_or(false);
-    if stale {
+    let (fresh, settling) = ART.lock().map(|art| (art.0 != key, art.2.is_some_and(|at| at.elapsed() < ART_SETTLE))).unwrap_or((false, false));
+    if fresh || settling {
         let art = read_art(&properties, &cancelled);
-        if let Ok(mut slot) = ART.lock() { *slot = (key.clone(), art); }
+        if let Ok(mut slot) = ART.lock() {
+            let since = if fresh { Some(std::time::Instant::now()) } else { slot.2 };
+            let art = if fresh { art } else { art.or_else(|| slot.1.clone()) };
+            *slot = (key.clone(), art, since);
+        }
     }
-    status.art_key = ART.lock().ok().and_then(|art| art.1.as_ref().map(|_| key.clone()));
+    // A chave muda junto com a arte: a interface busca de novo quando a capa definitiva chega.
+    status.art_key = ART.lock().ok().and_then(|art| art.1.as_ref().map(|data| format!("{key}#{}", data.len())));
     if let Ok(controls) = info.Controls() {
         status.can_previous = controls.IsPreviousEnabled().unwrap_or(false);
         status.can_next = controls.IsNextEnabled().unwrap_or(false);

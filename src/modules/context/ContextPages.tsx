@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ShellBridge } from "../../lib/shellBridge";
 import type { useSettings } from "../../hooks/useSettings";
 import type { useContextSnapshots } from "./useContext";
@@ -18,7 +18,7 @@ import { SportsPage, SportsPreferences } from "../sports/SportsPages";
 import type { SportsControl } from "../sports/useSports";
 import { PetPage } from "../pet/PetPage";
 import type { PetControl } from "../pet/usePet";
-import type { ClaudeLimit, CodexQuotaSnapshot, LyricLine, Lyrics, MediaAction, MediaStatus, QuotaWindow } from "./types";
+import type { ClaudeLimit, CodexQuotaSnapshot, LyricLine, Lyrics, MediaAction, MediaStatus, QuotaWindow, TrackInfo } from "./types";
 
 // Hora e clima ficam só no compacto; aberto, o rolo tem Início, Player, Claude,
 // Sistema, Tarefas e Nota.
@@ -171,16 +171,39 @@ export function coverStyle(seed: string) {
   const hue = Math.abs(hash) % 360, second = (hue + 40 + (Math.abs(hash >> 8) % 80)) % 360;
   return { background: `radial-gradient(120% 120% at 20% 10%, oklch(46% .12 ${hue}), oklch(22% .06 ${second}))`, color: "rgba(255,255,255,.75)" };
 }
-/** Capa real do app de mídia; só busca quando a faixa (artKey) muda. */
-function useMediaArt(bridge: ShellBridge, artKey: string | null | undefined) {
+/** Ficha da faixa (álbum, ano, gênero, capa) compartilhada: o Player busca; o fundo do Vidro só lê. */
+const trackInfos = new Map<string, TrackInfo | null>();
+const trackListeners = new Set<() => void>();
+export function useTrackInfo(bridge: ShellBridge, media: MediaStatus | null | undefined, fetch: boolean) {
+  const key = media?.title ? `${media.title}${media.artist ?? ""}` : "";
+  const info = useSyncExternalStore(listener => { trackListeners.add(listener); return () => trackListeners.delete(listener); }, () => trackInfos.get(key));
+  useEffect(() => {
+    if (!fetch || !key || !bridge.getTrackInfo || trackInfos.has(key)) return;
+    trackInfos.set(key, null);
+    const done = (value: TrackInfo | null) => { if (trackInfos.size > 60) trackInfos.clear(); trackInfos.set(key, value); trackListeners.forEach(listener => listener()); };
+    bridge.getTrackInfo(media!.title!, media!.artist ?? "", media!.durationMs ?? null).then(done, () => { trackInfos.delete(key); });
+  }, [fetch, key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return key ? info ?? null : null;
+}
+/** Capa certa: navegadores publicam o ícone do site ou do próprio navegador; ali vale a do iTunes. */
+export function bestArt(media: MediaStatus | null | undefined, appArt: string | null, info: TrackInfo | null) {
+  const browser = /chrome|edge|firefox|opera|brave|vivaldi|navegador/i.test(media?.source ?? "");
+  return browser ? info?.art ?? appArt : appArt ?? info?.art ?? null;
+}
+/** Capa real do app de mídia; só busca quando a faixa (artKey) muda. A última capa fica guardada:
+ * aviso de faixa, fundo do player e o próprio player usam a mesma leitura. */
+let lastArt: { key: string; url: Promise<string | null> } | null = null;
+export function useMediaArt(bridge: ShellBridge, artKey: string | null | undefined) {
   const [art, setArt] = useState<{ key: string; url: string | null }>({ key: "", url: null });
   useEffect(() => {
     if (!artKey || !bridge.getMediaArt || art.key === artKey) return;
     let active = true;
-    bridge.getMediaArt().then(url => { if (active) setArt({ key: artKey, url }); }).catch(() => {});
+    if (lastArt?.key !== artKey) lastArt = { key: artKey, url: bridge.getMediaArt().catch(() => null) };
+    void lastArt.url.then(url => { if (active) setArt({ key: artKey, url }); });
     return () => { active = false; };
   }, [artKey, bridge]); // eslint-disable-line react-hooks/exhaustive-deps
-  return artKey && art.key === artKey ? art.url : null;
+  // Capa nova da mesma faixa ainda chegando: mantém a anterior em vez de piscar.
+  return artKey ? art.url : null;
 }
 function MediaIcon({ path, size = 15 }: { path: string; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d={path} /></svg>;
@@ -193,7 +216,8 @@ function Player({ media, bridge, enabled, stale }: { media: MediaStatus | null |
   const active = media && (media.state === "playing" || media.state === "paused");
   const position = active ? mediaPosition(media, now) : null;
   const lyrics = useLyrics(bridge, active ? media : null, lyricsOpen);
-  const artUrl = useMediaArt(bridge, active ? media.artKey : null);
+  const info = useTrackInfo(bridge, active ? media : null, true);
+  const artUrl = bestArt(media, useMediaArt(bridge, active ? media.artKey : null), info);
   useEffect(() => { if (!failure) return; const timer = window.setTimeout(() => setFailure(""), 3000); return () => window.clearTimeout(timer); }, [failure]);
   const send = (action: MediaAction) => {
     if (!bridge.mediaControl) return;
@@ -202,7 +226,7 @@ function Player({ media, bridge, enabled, stale }: { media: MediaStatus | null |
   const toggleLyrics = () => setLyricsOn(!lyricsOpen);
   const title = !bridge.desktop ? "Player do Windows" : !enabled ? "Mídia desativada" : active ? media.title ?? "Título indisponível" : "Nada tocando";
   const meta = !bridge.desktop ? "Disponível no app desktop" : !enabled ? "Ative em Módulos" : active
-    ? [media.artist, media.source].filter(Boolean).join(" · ") || (playing ? "Tocando" : "Pausado")
+    ? media.artist || media.source || (playing ? "Tocando" : "Pausado")
     : "Toque algo em qualquer player do Windows";
   const controls = active && <div className="player-controls">
     <button type="button" className="media-button" aria-label="Faixa anterior" disabled={!media.canPrevious} onClick={() => send("previous")}><MediaIcon path={icons.previous} /></button>
@@ -221,8 +245,11 @@ function Player({ media, bridge, enabled, stale }: { media: MediaStatus | null |
     const message = !lyrics ? "Buscando letra…" : lyrics.state === "instrumental" ? "Instrumental" : lyrics.state === "plain" ? "Letra sem sincronia" : lyrics.state === "error" ? "Não foi possível buscar a letra" : lyrics.state === "none" ? "Letra não encontrada" : null;
     const at = (offset: number) => lines[index + offset]?.text || (index + offset >= 0 && index + offset < lines.length ? "♪" : "");
     return <div className="player-page lyrics-mode" data-state={media.state}>
+      <div className="lyrics-head">
+        <div className="player-cover small" aria-hidden="true" style={artUrl ? undefined : coverStyle(`${media.title ?? ""}${media.artist ?? ""}`)}>{artUrl && <img src={artUrl} alt="" />}</div>
+        <span className="player-meta"><b>{title}</b>{media.artist ? ` · ${media.artist}` : ""}</span>
+      </div>
       <div className="lyrics" aria-live="off">
-        <span className="player-meta">{title} · {media.artist ?? meta}</span>
         {message ? <strong className="lyric-current lyric-note">{message}</strong> : <>
           <span className="lyric-side" key={`p${index}`}>{at(-1)}</span>
           <strong className="lyric-current" key={`c${index}`}>{index < 0 ? "♪" : at(0)}</strong>
@@ -232,21 +259,23 @@ function Player({ media, bridge, enabled, stale }: { media: MediaStatus | null |
       <div className="lyrics-footer">{progress}{controls}{lyricsButton}</div>
     </div>;
   }
+  // Barra no estilo Spotify: capa e ficha à esquerda, controles sobre o progresso no centro, letra à direita.
+  // No tema Vidro, a capa vira capa de disco: o vinil sai de trás dela e gira enquanto toca, com a agulha em cima.
   return <div className="player-page" data-state={media?.state ?? "unavailable"}>
-    <div className="player-top">
-      <div className="player-cover" aria-hidden="true" style={artUrl ? undefined : coverStyle(active ? `${media.title ?? ""}${media.artist ?? ""}` : "")}>
+    <div className="player-deck" aria-hidden="true">
+      {active && <span className="vinyl"><span className="vinyl-disc"><span className="vinyl-label" style={artUrl ? { backgroundImage: `url("${artUrl}")` } : coverStyle(`${media.title ?? ""}${media.artist ?? ""}`)} /></span><span className="vinyl-sheen" /></span>}
+      <div className="player-cover" style={artUrl ? undefined : coverStyle(active ? `${media.title ?? ""}${media.artist ?? ""}` : "")}>
         {artUrl ? <img src={artUrl} alt="" /> : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l11-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="17" cy="16" r="3" /></svg>}
       </div>
-      <div className="player-info">
-        <strong className="player-title">{title}</strong>
-        <span className="player-meta">{meta}{stale && active ? " · dado antigo" : ""}</span>
-      </div>
-      {playing ? <span className="player-eq" aria-hidden="true"><i /><i /><i /><i /></span> : null}
-      {lyricsButton}
+      {active && <span className="tonearm"><i /></span>}
     </div>
-    {progress}
-    {controls}
-    {failure && <span className="player-failure" role="status">{failure}</span>}
+    <div className="player-info">
+      <strong className="player-title">{title}</strong>
+      <span className="player-meta">{playing ? <span className="player-eq" aria-hidden="true"><i /><i /><i /><i /></span> : null}{meta}{stale && active ? " · dado antigo" : ""}</span>
+      {active && <span className="player-sub">{[info?.album, info?.year, info?.genre, media.artist ? media.source : null].filter(Boolean).join(" · ")}</span>}
+    </div>
+    <div className="player-center">{controls}{progress}{failure && <span className="player-failure" role="status">{failure}</span>}</div>
+    <div className="player-actions">{lyricsButton}</div>
   </div>;
 }
 

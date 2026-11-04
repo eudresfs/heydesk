@@ -92,4 +92,6 @@ export interface Pet {
   lastDrinkAt: number; lastRefuseAt: number;
 }
 export interface LyricLine { atMs: number; text: string }
+/** Ficha da faixa vinda do iTunes (só com o Player aberto). */
+export interface TrackInfo { album: string | null; year: number | null; genre: string | null; art: string | null }
 export interface Lyrics { state: "synced" | "plain" | "instrumental" | "none" | "error"; lines: LyricLine[]; plain: string | null }

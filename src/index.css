@@ -154,10 +154,10 @@ h1:focus, .panel:focus { outline: none; }
 .mascot[data-animated=true][data-reaction=back] svg { animation: mascot-back 420ms var(--ease-pop) both; }
 @keyframes mascot-away { to { translate: 0 -160%; opacity: 0; } }
 @keyframes mascot-back { from { translate: 0 -160%; opacity: 0; } }
-.compact-track { position: absolute; inset: 0 18px; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; font-size: 12px; white-space: nowrap; animation: track-in 250ms var(--ease-out) 200ms both; }
+.compact-track { position: absolute; inset: 0 48px; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; font-size: 12px; white-space: nowrap; animation: track-in 250ms var(--ease-out) 200ms both; }
 .compact-track b { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; font-weight: 650; }
 .compact-track span { overflow: hidden; text-overflow: ellipsis; color: var(--text-muted); }
-.compact-track b::after { content: "—"; margin-left: 6px; color: var(--text-faint); font-weight: 400; }
+.compact-track b::after { content: "·"; margin-left: 6px; color: var(--text-faint); font-weight: 400; }
 /* Letra no compacto: a linha atual troca subindo, como no Nusa. */
 .compact-lyric { position: absolute; inset: 0 34px; z-index: 2; display: block; overflow: hidden; font-size: 12.5px; font-weight: 600; line-height: 32px; text-align: center; white-space: nowrap; text-overflow: ellipsis; animation: lyric-swap 200ms var(--ease-out) both; }
 @keyframes lyric-swap { from { opacity: 0; translate: 0 10px; filter: blur(3px); } }
@@ -664,36 +664,80 @@ h1:focus, .panel:focus { outline: none; }
 .context-note { font-size: var(--fs-body); color: var(--text-muted); margin: 0; line-height: 18px; max-width: 46ch; }
 .source-caption { margin: 6px 0 0; color: var(--text-faint); font-size: var(--fs-meta); line-height: 14px; }
 
-/* Player no estilo iOS: capa e título no topo, progresso de ponta a ponta, controles ao centro. */
-.player-page { display: flex; flex-direction: column; justify-content: center; gap: 7px; height: 100%; min-width: 0; }
-.player-top { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto auto; align-items: center; column-gap: 11px; }
-.player-cover { position: relative; width: 52px; height: 52px; border-radius: 10px; overflow: hidden; background: var(--surface-1); box-shadow: var(--ring); color: var(--text-faint); display: grid; place-items: center; }
+/* Player: capa grande à esquerda na altura toda; título e controles na linha de cima, progresso embaixo. */
+.player-page { display: grid; grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1.15fr) 28px; align-items: center; column-gap: 14px; height: 100%; min-width: 0; padding: 4px 2px; }
+.player-page > .player-cover { width: 80px; height: 80px; border-radius: 8px; }
+.player-center { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.player-center .player-progress { grid-template-columns: 30px minmax(0, 1fr) 30px; }
+.player-cover { position: relative; width: 52px; height: 52px; border-radius: 10px; overflow: hidden; background: var(--surface-1); box-shadow: var(--ring), 0 6px 18px -6px rgba(0,0,0,.6); color: var(--text-faint); display: grid; place-items: center; }
+.player-cover.small { width: 24px; height: 24px; border-radius: 6px; flex: none; }
 .player-cover img { width: 100%; height: 100%; object-fit: cover; animation: hd-in 300ms var(--ease-out) both; }
 .player-page[data-state=playing] .player-cover { color: var(--text-muted); }
-.player-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.player-title { font-size: var(--fs-title); line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
-.player-meta { font-size: var(--fs-meta); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.player-eq { display: flex; align-items: center; gap: 2px; height: 14px; margin-right: 4px; }
-.player-eq i { width: 2.5px; height: 100%; border-radius: 2px; transform-origin: center; background: var(--text-muted); animation: eq .9s steps(4) infinite alternate; }
+.player-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.player-title { font-size: 15px; line-height: 20px; font-weight: 650; white-space: nowrap; overflow: hidden; mask-image: linear-gradient(90deg, #000 85%, transparent); }
+.player-meta { display: flex; align-items: center; min-width: 0; font-size: var(--fs-meta); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-meta b { flex: none; max-width: 60%; margin-right: .35em; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
+.player-sub { font-size: var(--fs-micro); color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-actions { display: flex; align-items: center; gap: 10px; }
+.player-eq { flex: none; display: flex; align-items: center; gap: 2px; height: 10px; margin-right: 6px; }
+.player-eq i { width: 2px; height: 100%; border-radius: 2px; transform-origin: center; background: var(--primary); animation: eq .9s steps(4) infinite alternate; }
 .player-eq i:nth-child(2) { animation-delay: -.3s; } .player-eq i:nth-child(3) { animation-delay: -.6s; } .player-eq i:nth-child(4) { animation-delay: -.15s; }
 .player-progress { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; column-gap: 8px; font-size: var(--fs-micro); color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .player-progress span:last-child { text-align: right; }
 .player-progress progress { height: 4px; }
 .player-progress progress::-webkit-progress-value { background: var(--primary); }
-.player-controls { display: flex; align-items: center; justify-content: center; gap: 18px; }
-.player-failure { margin-left: 4px; font-size: var(--fs-meta); color: var(--danger); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-controls { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.player-failure { text-align: center; font-size: var(--fs-meta); color: var(--danger); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .media-button.lyrics-button { margin-left: 0; }
 .media-button.lyrics-button[aria-pressed=true] { color: var(--on-primary); background: var(--primary); }
-/* Letra: linha atual em destaque entre a anterior e a próxima; rodapé com progresso e controles. */
-.player-page.lyrics-mode { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; row-gap: 6px; height: 100%; }
-.lyrics { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 0; overflow: hidden; }
+/* Letra: faixa no topo, linha atual em destaque entre a anterior e a próxima, rodapé com progresso e controles. */
+.player-page.lyrics-mode { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; row-gap: 4px; padding: 2px; }
+.lyrics-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lyrics { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; overflow: hidden; padding-left: 32px; }
 .lyric-side, .lyric-current { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: hd-swap 150ms var(--ease-out) both; }
-.lyric-side { font-size: var(--fs-meta); line-height: 15px; color: var(--text-faint); }
-.lyric-current { font-size: 15px; line-height: 21px; font-weight: 600; color: var(--text); }
-.lyric-note { font-weight: 500; color: var(--text-muted); animation: none; }
-.lyrics-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 10px; }
+.lyric-side { font-size: var(--fs-meta); line-height: 16px; color: var(--text-faint); }
+.lyric-current { font-size: 17px; line-height: 23px; font-weight: 650; color: var(--text); }
+.lyric-note { font-size: 15px; font-weight: 500; color: var(--text-muted); animation: none; }
+.lyrics-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; column-gap: 12px; }
 .lyrics-footer .player-controls { gap: 6px; }
-.lyrics-footer .player-controls { margin-top: 0; }
+/* Vidro: player de vinil. A capa fica na frente, o disco sai de trás dela quando toca e gira em degraus
+   (a janela não recompõe a 60 fps); o brilho fica parado por cima, a agulha desce sobre o disco. */
+.player-deck { display: contents; }
+.vinyl, .tonearm { display: none; }
+[data-glass] .player-page:not(.lyrics-mode) { grid-template-columns: 180px minmax(0, 1fr) 28px; grid-template-rows: auto auto auto; grid-template-areas: "deck info info" "deck progress progress" "deck controls lyrics"; align-content: center; row-gap: 4px; }
+[data-glass] .player-page:not(.lyrics-mode) .player-center { display: contents; }
+[data-glass] .player-page:not(.lyrics-mode) .player-info { grid-area: info; }
+[data-glass] .player-page:not(.lyrics-mode) .player-controls { grid-area: controls; gap: 14px; padding-left: 28px; }
+[data-glass] .player-page:not(.lyrics-mode) .player-progress { grid-area: progress; }
+[data-glass] .player-page:not(.lyrics-mode) .player-actions { grid-area: lyrics; }
+[data-glass] .player-page:not(.lyrics-mode) .player-failure { grid-area: progress; align-self: end; }
+[data-glass] .player-deck { grid-area: deck; align-self: center; position: relative; display: block; width: 180px; height: 108px; }
+[data-glass] .player-deck .player-cover { position: absolute; left: 0; top: 2px; z-index: 2; width: 104px; height: 104px; border-radius: 7px; box-shadow: 0 0 0 1px rgba(255,255,255,.08), 6px 0 14px -4px rgba(0,0,0,.7); }
+[data-glass] .vinyl { display: block; position: absolute; left: 6px; top: 6px; z-index: 1; width: 96px; height: 96px; border-radius: 50%; transition: translate 700ms var(--ease-out); }
+[data-glass] .player-page[data-state=playing] .vinyl { translate: 60px 0; }
+.vinyl-disc { position: absolute; inset: 0; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 4px 12px -2px rgba(0,0,0,.7);
+  background: radial-gradient(circle, transparent 0 19px, #0c0c0d 19.5px 21.5px, transparent 22px), repeating-radial-gradient(circle, #141416 0 1.2px, #1d1d20 1.4px 2.6px); }
+.vinyl-label { width: 36px; height: 36px; border-radius: 50%; background: center / cover no-repeat; box-shadow: 0 0 0 1px rgba(0,0,0,.6); position: relative; }
+.vinyl-label::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: #0c0c0d; }
+.vinyl-sheen { position: absolute; inset: 0; border-radius: 50%; pointer-events: none; background: conic-gradient(from 30deg, transparent 0 10%, rgba(255,255,255,.13) 14%, transparent 20% 55%, rgba(255,255,255,.1) 62%, transparent 68%); }
+[data-glass] .player-page[data-state=playing] .vinyl-disc { animation: vinyl-spin 1.8s steps(30) infinite; }
+@keyframes vinyl-spin { to { rotate: 360deg; } }
+/* Agulha: pivô no canto de cima à direita; estacionada fora do disco, desce sobre ele quando toca. */
+[data-glass] .tonearm { display: block; position: absolute; left: 164px; top: 2px; z-index: 3; width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f2f2f4, #8e8e93); box-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.tonearm i { position: absolute; left: 4.5px; top: 6px; width: 3px; height: 66px; border-radius: 2px; background: linear-gradient(90deg, #d1d1d6, #8e8e93); transform-origin: 50% 0; rotate: 6deg; transition: rotate 700ms var(--ease-out); box-shadow: 1px 2px 3px rgba(0,0,0,.5); }
+.tonearm i::after { content: ""; position: absolute; left: -2px; bottom: -6px; width: 7px; height: 9px; border-radius: 2px; background: #3a3a3c; }
+[data-glass] .player-page[data-state=playing] .tonearm i { rotate: 30deg; }
+/* Botão principal branco como nos toca-discos. */
+[data-glass] .player-page .media-button.primary { width: 34px; height: 34px; background: #f5f5f7; color: #1c1c1e; box-shadow: 0 2px 8px -2px rgba(0,0,0,.6); }
+[data-reduced-motion=true] .vinyl-disc { animation: none !important; }
+[data-reduced-motion=true] .vinyl, [data-reduced-motion=true] .tonearm i { transition: none; }
+/* Vidro: capa da faixa desfocada atrás do player, acende junto com a abertura. */
+.island-cover { opacity: 0; transition: opacity 400ms var(--ease-out); }
+.island-cover image { filter: blur(28px) saturate(1.3) brightness(.42); transform: scale(1.25); transform-box: fill-box; transform-origin: center; }
+.island-cover[data-on] { opacity: var(--hud-p, 0); }
+/* Aviso de faixa: capa à esquerda, música e artista no centro, equalizador à direita. */
+.compact-cover { width: 20px; height: 20px; border-radius: 5px; overflow: hidden; display: grid; place-items: center; background: rgba(255,255,255,.1); animation: track-in 250ms var(--ease-out) 200ms both; }
+.compact-cover img { width: 100%; height: 100%; object-fit: cover; }
 .media-button { width: 26px; height: 26px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--r-md); background: transparent; color: var(--text-muted); transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out), scale 200ms var(--ease-press); }
 .media-button:hover:enabled { background: rgba(255,255,255,.08); color: var(--text); }
 .media-button:active:enabled { scale: .94; }

@@ -29,11 +29,13 @@ test("bateria baixa anuncia só ao cruzar 20% e 10% fora da tomada", () => {
   assert.deepEqual(detectActivities(snapshot({ percent: 21, plugged: true }), snapshot({ percent: 20, plugged: true })), []);
 });
 
-test("troca de faixa tocando anuncia; pausa e primeira mídia não", () => {
+test("troca de faixa e música começando anunciam; pausar e retomar a mesma faixa não", () => {
   assert.equal(detectActivities(snapshot({}, track("A")), snapshot({}, track("B")))[0].value, "B");
   assert.deepEqual(detectActivities(snapshot({}, track("A")), snapshot({}, track("A"))), []);
   assert.deepEqual(detectActivities(snapshot({}, track("A")), snapshot({}, track("B", "paused"))), []);
-  assert.deepEqual(detectActivities(snapshot({}, null), snapshot({}, track("B"))), []);
+  assert.deepEqual(detectActivities(snapshot({}, track("A", "paused")), snapshot({}, track("A"))), []);
+  assert.equal(detectActivities(snapshot({}, null), snapshot({}, track("B")))[0].value, "B");
+  assert.equal(detectActivities(snapshot({}, { ...track("A"), state: "empty" as const }), snapshot({}, track("A")))[0].value, "A");
 });
 
 test("fila mostra um por vez, prioridade interrompe, mesmo grupo substitui e expira em ordem", () => {

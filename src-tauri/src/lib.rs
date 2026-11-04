@@ -15,6 +15,7 @@ mod codex_usage;
 mod desktop_context;
 mod interaction;
 mod lyrics;
+mod track_info;
 mod notes;
 mod pointer;
 mod updater;
@@ -68,6 +69,12 @@ fn get_claude_limits(monitor: State<'_, claude_usage::ClaudeMonitor>) -> claude_
 #[tauri::command]
 async fn get_lyrics(app: tauri::AppHandle, title: String, artist: String, duration_ms: Option<u64>) -> Result<lyrics::Lyrics, String> {
     tauri::async_runtime::spawn_blocking(move || app.state::<lyrics::LyricsCache>().get(&title, &artist, duration_ms))
+        .await.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn get_track_info(app: tauri::AppHandle, title: String, artist: String, duration_ms: Option<u64>) -> Result<Option<track_info::TrackInfo>, String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<track_info::TrackInfoCache>().get(&title, &artist, duration_ms))
         .await.map_err(|error| error.to_string())
 }
 
@@ -404,6 +411,7 @@ pub fn run() {
             get_codex_limits,
             get_claude_limits,
             get_lyrics,
+            get_track_info,
             set_keep_awake,
             load_notes,
             ask_start,
@@ -468,6 +476,7 @@ pub fn run() {
             app.manage(desktop_context::DesktopMonitor::new(desktop_config));
             app.manage(store);
             app.manage(lyrics::LyricsCache::default());
+            app.manage(track_info::TrackInfoCache::default());
             app.manage(awake::KeepAwake::default());
             app.manage(ask::Ask::default());
             app.manage(system_events::Notifications::default());

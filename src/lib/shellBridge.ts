@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CodexUsageSnapshot } from "../modules/codex-usage/types";
-import type { ClaudeQuotaSnapshot, CodexQuotaSnapshot, DesktopSnapshot, Lyrics, MediaAction, Notes } from "../modules/context/types";
+import type { ClaudeQuotaSnapshot, CodexQuotaSnapshot, DesktopSnapshot, Lyrics, MediaAction, Notes, TrackInfo } from "../modules/context/types";
 
 export interface AppSettings {
   schemaVersion: 3;
@@ -66,6 +66,7 @@ export interface ShellBridge {
   mediaControl?(action: MediaAction): Promise<void>;
   /** LRCLIB sob demanda: envia título, artista e duração. */
   getLyrics?(title: string, artist: string, durationMs: number | null): Promise<Lyrics>;
+  getTrackInfo?(title: string, artist: string, durationMs: number | null): Promise<TrackInfo | null>;
   setKeepAwake?(on: boolean): Promise<boolean>;
   loadNotes?(): Promise<Notes>;
   /** Pergunta ao Claude pelo CLI logado; `onText` recebe a resposta em pedaços. */
@@ -154,6 +155,7 @@ export function createShellBridge(): ShellBridge {
     getDesktopStatus: () => invoke<DesktopSnapshot>("get_desktop_status"),
     mediaControl: action => invoke<void>("media_control", { action }),
     getLyrics: (title, artist, durationMs) => invoke<Lyrics>("get_lyrics", { title, artist, durationMs }),
+    getTrackInfo: (title, artist, durationMs) => invoke<TrackInfo | null>("get_track_info", { title, artist, durationMs }),
     setKeepAwake: on => invoke<boolean>("set_keep_awake", { on }),
     loadNotes: () => invoke<Notes>("load_notes"),
     ask: async (prompt, onText) => {

@@ -41,7 +41,10 @@ export function detectActivities(previous: DesktopSnapshot | null, next: Desktop
     }
   }
   const media = next.media, old = previous.media;
-  if (old && media?.state === "playing" && media.title && (media.title !== old.title || media.artist !== old.artist)) {
+  // Faixa nova tocando, ou música começando do zero (nada tocava antes); retomar a mesma faixa pausada não avisa.
+  const changed = old && (media?.title !== old.title || media?.artist !== old.artist);
+  const started = !old || (old.state !== "playing" && old.state !== "paused");
+  if (media?.state === "playing" && media.title && (changed || started)) {
     found.push({ kind: "track", group: "track", icon: "note", value: media.title, label: media.artist ?? media.source ?? "Tocando agora", priority: 1, durationMs: 3200, width: 340, mood: "happy", tone: "neutral" });
   }
   return found;

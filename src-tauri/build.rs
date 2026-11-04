@@ -9,6 +9,7 @@ fn main() {
         "get_codex_limits",
         "get_claude_limits",
         "get_lyrics",
+        "get_track_info",
         "set_keep_awake",
         "load_notes",
         "ask_start",
