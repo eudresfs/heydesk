@@ -160,6 +160,20 @@ h1:focus, .panel:focus { outline: none; }
 .compact-track b::after { content: "·"; margin-left: 6px; color: var(--text-faint); font-weight: 400; }
 /* Letra no compacto: a linha atual troca subindo, como no Nusa. */
 .compact-lyric { position: absolute; inset: 0 34px; z-index: 2; display: block; overflow: hidden; font-size: 12.5px; font-weight: 600; line-height: 32px; text-align: center; white-space: nowrap; text-overflow: ellipsis; animation: lyric-swap 200ms var(--ease-out) both; }
+/* Trecho instrumental: mascote de fone balançando a cabeça; notas de tipos diferentes sobem e somem. */
+.compact-groove { position: absolute; left: 50%; top: 0; z-index: 2; width: 64px; height: 32px; margin-left: -32px; display: grid; place-items: center; animation: lyric-swap 200ms var(--ease-out) both; }
+.compact-groove .mascot { animation: groove-bob .5s ease-in-out infinite alternate; transform-origin: 50% 90%; }
+@keyframes groove-bob { from { rotate: -7deg; translate: 0 .5px; } to { rotate: 7deg; translate: 0 -1.5px; } }
+.groove-notes { position: absolute; inset: 0; pointer-events: none; }
+.groove-notes i { position: absolute; left: 50%; top: 14px; font-style: normal; font-size: 11px; line-height: 1; color: #fff; opacity: 0; text-shadow: 0 0 6px var(--glow-shadow, rgba(120,190,255,.8)); animation: groove-note 2.2s ease-out infinite; }
+.groove-notes i:nth-child(1) { --x: -26px; --r: -18deg; animation-delay: 0s; }
+.groove-notes i:nth-child(2) { --x: 22px; --r: 14deg; animation-delay: -.45s; font-size: 12px; }
+.groove-notes i:nth-child(3) { --x: -16px; --r: -8deg; animation-delay: -.9s; font-size: 10px; color: #ffd34d; }
+.groove-notes i:nth-child(4) { --x: 28px; --r: 20deg; animation-delay: -1.35s; color: #7fd6ff; }
+.groove-notes i:nth-child(5) { --x: -30px; --r: -24deg; animation-delay: -1.8s; font-size: 10px; color: #ff8ad0; }
+@keyframes groove-note { 0% { opacity: 0; translate: 0 2px; scale: .6; rotate: 0deg; } 15% { opacity: 1; } 70% { opacity: .9; } 100% { opacity: 0; translate: var(--x) -14px; scale: 1.05; rotate: var(--r); } }
+[data-reduced-motion=true] .compact-groove .mascot, [data-reduced-motion=true] .groove-notes i { animation: none; }
+[data-reduced-motion=true] .groove-notes i:nth-child(-n+2) { opacity: 1; translate: var(--x) -6px; }
 @keyframes lyric-swap { from { opacity: 0; translate: 0 10px; filter: blur(3px); } }
 .compact-media.small { height: 10px; gap: 1.5px; }
 .compact-media.small i { width: 2px; }

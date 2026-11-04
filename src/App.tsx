@@ -604,7 +604,12 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       </span>}
       {/* Faixa nova: o mascote fica montado e sai pelo topo (reação "away"); sem reações, sai de cena. */}
       {!activity && (liveGame || waterShow) ? null : singing || trackShow && !mascotPrefs.reactions ? null : <Mascot expression={compactExpression} {...themed(compactExpression)} active={!island.expanded && !away} reducedMotion={reducedMotion} look={mascotLook ?? compactLook} follow={mascotLook ? undefined : compactFollow} shape={mascotPrefs.eyeShape} color={petColor ?? mascotPrefs.eyeColor} gear={petGear} blink={mascotPrefs.blink} bounce={mascotPrefs.bounce} pace={mascotPrefs.pace} reaction={!mascotPrefs.reactions ? null : trackShow ? { kind: "away", key: trackShow.id } : activity ? { kind: "announce", key: activity.id } : mascotBack ? { kind: "back", key: mascotBack } : null} />}
-      {singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
+      {/* Trecho sem letra: o mascote de fone balança no ritmo e solta notas no ar. */}
+      {singing && lyricLine === "♪" ? <span className="compact-groove" aria-label="Trecho instrumental">
+        <Mascot expression="happy" {...themed("happy")} active={false} reducedMotion={reducedMotion} shape={mascotPrefs.eyeShape} color={petColor ?? mascotPrefs.eyeColor} gear={{ ...petGear, hat: "hat_headphones" }} blink={mascotPrefs.blink} bounce={false} pace={mascotPrefs.pace} />
+        <span className="groove-notes" aria-hidden="true"><i>♪</i><i>♫</i><i>♬</i><i>♩</i><i>♫</i></span>
+      </span>
+        : singing && <span className="compact-lyric" key={`lyric-${lyricAt}`} aria-live="off">{lyricLine}</span>}
       {trackShow && <span className="compact-track" key={`track-${trackShow.id}`} title={`${trackShow.value} — ${trackShow.label}`}><b>{trackShow.value}</b><span>{trackShow.label}</span></span>}
       {waterShow ? <span className="compact-side compact-right compact-water"><span className="water-pill">abrir</span></span>
         : !activity && liveGame ? <span className="compact-side compact-right compact-live"><span className="live-map">{(rounds => rounds ? <>{rounds.map}{liveGame.maps && liveGame.maps.length > 1 && <small>{liveGame.home.score ?? 0}–{liveGame.away.score ?? 0}</small>}</> : liveGame.clock ?? liveGame.detail)(csMapScore(liveGame, sports.csLive))}</span></span>

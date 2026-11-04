@@ -113,6 +113,12 @@ export function Mascot({ expression, size = "small", active, reducedMotion, look
         ? <image className="mascot-image" href={image} x="3" y="-4" width="24" height="24" preserveAspectRatio="xMidYMid meet" style={pixelated ? { imageRendering: "pixelated" } : undefined} />
         : <Eyes expression={shown} shape={shape} />}</g>
       {gear?.hat && !image && <Hat id={gear.hat} />}
+      {/* Fone também sobre a imagem do tema (os outros acessórios cobririam o desenho). */}
+      {gear?.hat === "hat_headphones" && image && <g className="mascot-phones" aria-hidden="true">
+        <path d="M4.2 6A10.8 11 0 0 1 25.8 6" fill="none" stroke="#2c2c34" strokeWidth="2.2" strokeLinecap="round" />
+        <rect x="1.4" y="4.6" width="4.6" height="8" rx="1.8" fill="#ff3ea5" stroke="#2c2c34" strokeWidth=".7" />
+        <rect x="24" y="4.6" width="4.6" height="8" rx="1.8" fill="#ff3ea5" stroke="#2c2c34" strokeWidth=".7" />
+      </g>}
       <StageMark stage={gear?.stage} />
     </svg>
   </span>;
