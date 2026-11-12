@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { avatarFrame, type AvatarDefinition } from "open-bot-avatar";
 import type { MascotLook } from "./useMascotPresence";
 import type { LookSource } from "./useMascotTouch";
 import { Hat, StageMark } from "../pet/PetGear";
@@ -45,9 +46,32 @@ function Eyes({ expression, shape }: { expression: MascotExpression; shape: EyeS
   return <ShapedEyes shape={shape} wide={expression === "wide"} />;
 }
 
+/** Corpo do open-bot-avatar: um quadro parado da lib (silhueta com volume, cor chapada) e o lugar
+ * dos olhos no plano do rosto. Os olhos desenhados são os do Heydesk, esticados para o par da lib. */
+export interface MascotAvatar { definition: AvatarDefinition; color: string }
+const AVATAR_INK = "#151515";
+function useAvatarFrame(avatar: MascotAvatar | null | undefined) {
+  return useMemo(() => {
+    if (!avatar) return null;
+    try {
+      const frame = avatarFrame(avatar.definition, { color: avatar.color, reducedMotion: true, time: 0 });
+      const paths = new Map(frame.paths.map(path => [path.id, path]));
+      const eye = frame.shapes.find(shape => shape.kind === "eye");
+      const { x, y, spacing, scale } = avatar.definition.eyes;
+      // Nossos olhos ficam a 17 unidades um do outro e medem ~10,4 de altura; a lib os desenha com
+      // 11 × escala (até 1,45× quando cabe). Escala separada em x e y casa o par com o contrato.
+      const sx = spacing / 17, sy = 11 * 1.3 * scale / 10.4;
+      const eyes = `translate(${x} ${y}) scale(${sx} ${sy}) translate(-15 -8)`;
+      // Acessórios sem esticar: escala única, subindo o quanto os olhos ficaram mais altos.
+      const hat = `translate(${x} ${y - 5.2 * (sy - sx)}) scale(${sx}) translate(-15 -8)`;
+      return { hat, root: frame.root.join(" "), color: frame.color, slices: frame.shapes.flatMap(shape => shape.kind === "slice" && paths.get(shape.path) ? [{ key: shape.key, matrix: shape.matrix.join(" "), path: paths.get(shape.path)! }] : []), face: (eye?.matrix ?? [1, 0, 0, 1, 0, 0]).join(" "), eyes };
+    } catch { return null; }
+  }, [avatar?.definition, avatar?.color]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 const bounded = (look: MascotLook) => ({ x: Number.isFinite(look.x) ? Math.max(-3.5, Math.min(3.5, look.x)) : 0, y: Number.isFinite(look.y) ? Math.max(-1, Math.min(2, look.y)) : 0 });
 
-export function Mascot({ expression, size = "small", active, reducedMotion, look = { x: 0, y: 0 }, follow, reaction, shape = "oval", color, blink = true, bounce = true, pace = "calm", image, pixelated = true, gear }: {
+export function Mascot({ expression, size = "small", active, reducedMotion, look = { x: 0, y: 0 }, follow, reaction, shape = "oval", color, blink = true, bounce = true, pace = "calm", image, pixelated = true, gear, avatar }: {
   expression: MascotExpression; size?: "small" | "large"; active: boolean; reducedMotion: boolean; look?: MascotLook;
   /** Olhar que muda a cada movimento do cursor: escrito direto no DOM, sem rerenderizar quem usa o mascote. */
   follow?: LookSource;
@@ -58,6 +82,8 @@ export function Mascot({ expression, size = "small", active, reducedMotion, look
   image?: string; pixelated?: boolean;
   /** Acessório da loja do bichinho e marca do estágio (lenda). */
   gear?: { hat?: string; stage?: PetStage };
+  /** Corpo do open-bot-avatar sob os olhos (sem imagem de tema). */
+  avatar?: MascotAvatar | null;
 }) {
   const [visible, setVisible] = useState(() => !document.hidden);
   useEffect(() => {
@@ -105,6 +131,17 @@ export function Mascot({ expression, size = "small", active, reducedMotion, look
   // cada render reafirma a posição (ao trocar de fonte não fica o último olhar velho).
   useEffect(() => { place(follow ? follow.get() : look); });
   const scale = size === "large" ? 2.07 : 1;
+  const body = useAvatarFrame(image ? null : avatar);
+  if (body) return <span className="mascot" ref={root} aria-hidden="true" data-size={size} data-expression={expression} data-animated={animated} data-reaction={animated && reaction ? reaction.kind : undefined} data-away={reaction?.kind === "away" && !animated ? "" : undefined} data-blink={blink} data-bounce={bounce} data-pace={pace} data-avatar="" data-stage={gear?.stage}>
+    <svg key={animated && reaction ? reaction.key : undefined} width={28 * scale} height={28 * scale} viewBox="0 0 100 100">
+      <g transform={`matrix(${body.root})`}>
+        {body.slices.map(slice => <path key={slice.key} d={slice.path.d} fillRule={slice.path.evenOdd ? "evenodd" : "nonzero"} transform={`matrix(${slice.matrix})`} fill={body.color} />)}
+        <g transform={`matrix(${body.face})`}><g transform={body.eyes} style={{ color: AVATAR_INK }}>
+          <g className="mascot-look" ref={lookNode} style={{ transform: `translate(${x}px, ${y}px)` }}><Eyes expression={shown} shape={shape} /></g>
+        </g>{gear?.hat && <g transform={body.hat}><Hat id={gear.hat} /></g>}</g>
+      </g>
+    </svg>
+  </span>;
   return <span className="mascot" ref={root} aria-hidden="true" data-size={size} data-expression={expression} data-animated={animated} data-reaction={animated && reaction ? reaction.kind : undefined} data-away={reaction?.kind === "away" && !animated ? "" : undefined} data-blink={blink} data-bounce={bounce} data-pace={pace} data-image={image ? "" : undefined} data-stage={gear?.stage} style={color && !image ? { color } : undefined}>
     <svg key={animated && reaction ? reaction.key : undefined} width={30 * scale} height={16 * scale} viewBox="0 0 30 16">
       {/* A imagem do tema ocupa o mesmo lugar dos olhos (passa um pouco da altura): olhar,

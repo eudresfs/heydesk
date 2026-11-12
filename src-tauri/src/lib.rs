@@ -15,6 +15,7 @@ mod codex_usage;
 mod desktop_context;
 mod interaction;
 mod lyrics;
+mod avatar;
 mod track_info;
 mod notes;
 mod pointer;
@@ -101,6 +102,19 @@ async fn save_notes(app: tauri::AppHandle, notes: notes::Notes) -> Result<notes:
 fn ask_start(app: tauri::AppHandle, id: u64, prompt: String, ask: State<'_, ask::Ask>) -> Result<(), String> {
     let workdir = app.path().app_local_data_dir().map_err(|error| error.to_string())?.join("ask");
     ask.start(app, id, prompt, workdir)
+}
+
+/// Abre o editor online do open-bot-avatar no navegador padrão. Endereço fixo: nada vindo da interface.
+#[tauri::command]
+fn avatar_editor() -> Result<(), String> {
+    std::process::Command::new("explorer.exe").arg("https://dominikscholz.github.io/open-bot-avatar/").spawn().map(|_| ()).map_err(|error| error.to_string())
+}
+
+/// Gera um corpo de mascote pelo Claude; rede e espera fora da thread principal.
+#[tauri::command]
+async fn avatar_generate(app: tauri::AppHandle, description: String) -> Result<avatar::AvatarDefinition, String> {
+    let workdir = app.path().app_local_data_dir().map_err(|error| error.to_string())?.join("ask");
+    tauri::async_runtime::spawn_blocking(move || avatar::generate(&description, workdir)).await.map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -412,6 +426,8 @@ pub fn run() {
             get_claude_limits,
             get_lyrics,
             get_track_info,
+            avatar_generate,
+            avatar_editor,
             set_keep_awake,
             load_notes,
             ask_start,

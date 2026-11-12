@@ -1085,6 +1085,15 @@ html[data-view=settings], html[data-view=settings] body { background: #0e0e10 !i
 .set-theme-crest[data-swatch] { display: grid; place-items: center; }
 .set-theme-crest[data-swatch]::before { content: ""; width: 38px; height: 11px; border-radius: 999px; background: var(--swatch); box-shadow: 0 0 12px color-mix(in srgb, var(--swatch-glow) 55%, transparent); }
 .set-theme span { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Corpo do mascote: cartão com o corpo da lib; os do usuário têm um × para remover. */
+.set-avatar { position: relative; display: inline-flex; }
+.set-theme .mascot[data-avatar] svg { width: 52px; height: 52px; }
+.set-avatar-remove { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: var(--surface-3); color: var(--text-muted); font-size: 13px; line-height: 1; cursor: pointer; opacity: 0; transition: opacity var(--t-fast); }
+.set-avatar:hover .set-avatar-remove, .set-avatar-remove:focus-visible { opacity: 1; }
+.set-avatar-generate { flex-wrap: nowrap; width: 100%; }
+.set-avatar-generate .set-input { flex: 1; min-width: 0; }
+.set-avatar-paste { display: flex; gap: 8px; align-items: flex-end; width: 100%; margin-top: 8px; }
+.set-avatar-paste textarea { flex: 1; height: auto; padding: 8px 10px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; resize: vertical; }
 .set-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .set-actions label.set-button { display: inline-flex; align-items: center; }
 .set-actions label[aria-disabled] { opacity: .45; pointer-events: none; }

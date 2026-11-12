@@ -1,3 +1,4 @@
+import type { AvatarDefinition } from "open-bot-avatar";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CodexUsageSnapshot } from "../modules/codex-usage/types";
@@ -16,9 +17,11 @@ export interface AppSettings {
   pageOrder?: string[];
   sounds?: SoundSettings;
 }
-export interface MascotSettings { eyeShape: "oval" | "round" | "pixel" | "line" | "heart"; eyeColor: string; glow: "aurora" | "amber" | "mint" | "rose" | "mono" | "custom"; glowColor: string; blink: boolean; look: boolean; reactions: boolean; bounce: boolean; pace: "calm" | "lively"; inPanel?: boolean; theme?: string; hud?: string }
+export interface MascotSettings { eyeShape: "oval" | "round" | "pixel" | "line" | "heart"; eyeColor: string; glow: "aurora" | "amber" | "mint" | "rose" | "mono" | "custom"; glowColor: string; blink: boolean; look: boolean; reactions: boolean; bounce: boolean; pace: "calm" | "lively"; inPanel?: boolean; theme?: string; hud?: string;
+  /** Corpo do mascote no formato do open-bot-avatar; null = só os olhos. */
+  avatar?: AvatarDefinition | null; avatarColor?: string; avatars?: AvatarDefinition[] }
 export interface SoundSettings { enabled: boolean; volume: number; pack: "soft" | "retro" | "minimal"; notifications: boolean; reminders: boolean; sports: boolean; interactions: boolean; respectDnd: boolean }
-export const defaultMascot: MascotSettings = { eyeShape: "oval", eyeColor: "#FFFFFF", glow: "aurora", glowColor: "#2D5BFF", blink: true, look: true, reactions: true, bounce: true, pace: "calm", inPanel: true, theme: "eyes", hud: "none" };
+export const defaultMascot: MascotSettings = { eyeShape: "oval", eyeColor: "#FFFFFF", glow: "aurora", glowColor: "#2D5BFF", blink: true, look: true, reactions: true, bounce: true, pace: "calm", inPanel: true, theme: "eyes", hud: "none", avatar: null, avatarColor: "#FF6A1A", avatars: [] };
 export const defaultSounds: SoundSettings = { enabled: true, volume: 55, pack: "soft", notifications: true, reminders: true, sports: true, interactions: false, respectDnd: true };
 
 export const defaultSettings: AppSettings = {
@@ -67,6 +70,10 @@ export interface ShellBridge {
   /** LRCLIB sob demanda: envia título, artista e duração. */
   getLyrics?(title: string, artist: string, durationMs: number | null): Promise<Lyrics>;
   getTrackInfo?(title: string, artist: string, durationMs: number | null): Promise<TrackInfo | null>;
+  /** Pede ao Claude um corpo de mascote a partir de uma descrição. */
+  generateAvatar?(description: string): Promise<AvatarDefinition>;
+  /** Abre o editor online do open-bot-avatar no navegador. */
+  openAvatarEditor?(): Promise<void>;
   setKeepAwake?(on: boolean): Promise<boolean>;
   loadNotes?(): Promise<Notes>;
   /** Pergunta ao Claude pelo CLI logado; `onText` recebe a resposta em pedaços. */
@@ -156,6 +163,8 @@ export function createShellBridge(): ShellBridge {
     mediaControl: action => invoke<void>("media_control", { action }),
     getLyrics: (title, artist, durationMs) => invoke<Lyrics>("get_lyrics", { title, artist, durationMs }),
     getTrackInfo: (title, artist, durationMs) => invoke<TrackInfo | null>("get_track_info", { title, artist, durationMs }),
+    generateAvatar: description => invoke<AvatarDefinition>("avatar_generate", { description }),
+    openAvatarEditor: () => invoke<void>("avatar_editor"),
     setKeepAwake: on => invoke<boolean>("set_keep_awake", { on }),
     loadNotes: () => invoke<Notes>("load_notes"),
     ask: async (prompt, onText) => {

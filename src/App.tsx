@@ -444,7 +444,8 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
   const style = { "--island-opacity": page === "prompter" && island.expanded ? (notes.prompter.opacity ?? 100) / 100 : settings.draft.appearance.opacity / 100, "--primary": accent, "--on-primary": accentLight ? "#171717" : "#ffffff",
     "--glow-a": glow[0], "--glow-b": glow[1], "--glow-c": glow[2], "--glow-shadow": `${glow[1]}cc`, "--glow-shadow-soft": `${glow[1]}66`,
     "--font-sans": theme.fontFamily, "--theme-ground": theme.colors?.ground, "--theme-accent": theme.colors?.accent, "--theme-text": theme.colors?.text, ...hudVars } as CSSProperties;
-  const themed = (expression: MascotExpression) => ({ image: moodImage(expression, theme.images), pixelated: theme.pixelated });
+  const mascotAvatar = useMemo(() => mascotPrefs.avatar ? { definition: mascotPrefs.avatar, color: mascotPrefs.avatarColor ?? "#FF6A1A" } : null, [mascotPrefs.avatar, mascotPrefs.avatarColor]);
+  const themed = (expression: MascotExpression) => ({ image: moodImage(expression, theme.images), pixelated: theme.pixelated, avatar: mascotAvatar });
   // Brilho da borda: só com o painel aberto e visível (em repouso o SMIL pintaria a 60 Hz o dia todo).
   const shimmerOn = Boolean(theme.hud?.shimmer && theme.hud.border) && island.expanded && !away && !reducedMotion;
   // Tema novo chegou: as camadas do HUD nasceram sem forma; pinta já, sem esperar o notch se mexer.
@@ -625,7 +626,7 @@ export default function App({ bridge: suppliedBridge }: { bridge?: ShellBridge }
       {island.error && <span className="sr-only" role="alert">{island.error}</span>}
     </button>
     {/* Lembrete de água com botões (fora do botão do compacto: botão dentro de botão não vale). */}
-    {thanksShow && waterThanks && !toast && !countShow && <WaterThanks key={waterThanks.key} level={waterThanks.level} images={theme.images} pixelated={theme.pixelated} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} reducedMotion={reducedMotion} />}
+    {thanksShow && waterThanks && !toast && !countShow && <WaterThanks key={waterThanks.key} level={waterThanks.level} images={theme.images} pixelated={theme.pixelated} avatar={mascotAvatar} shape={mascotPrefs.eyeShape} color={mascotPrefs.eyeColor} reducedMotion={reducedMotion} />}
     {card ?? leavingCard}
   <Tooltips /></main>;
 }

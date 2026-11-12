@@ -10,6 +10,8 @@ fn main() {
         "get_claude_limits",
         "get_lyrics",
         "get_track_info",
+        "avatar_generate",
+        "avatar_editor",
         "set_keep_awake",
         "load_notes",
         "ask_start",

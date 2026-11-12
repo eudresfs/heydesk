@@ -1,7 +1,7 @@
 {
   "name": "heydesk",
   "private": true,
-  "version": "0.6.10",
+  "version": "0.7.0",
   "license": "MIT",
   "packageManager": "npm@11.19.0",
   "engines": {
@@ -21,6 +21,7 @@
     "@crabnebula/tauri-plugin-drag": "^2.1.0",
     "@tauri-apps/api": "2.12.4",
     "motion": "^11.18.2",
+    "open-bot-avatar": "0.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

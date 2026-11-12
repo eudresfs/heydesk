@@ -48,11 +48,17 @@ pub struct MascotSettings {
     pub theme: String,
     /// Pacote do visual do notch (HUD), independente do mascote; "none" = notch padrão.
     pub hud: String,
+    /// Corpo do mascote (open-bot-avatar) sob os olhos; None = só os olhos.
+    pub avatar: Option<crate::avatar::AvatarDefinition>,
+    pub avatar_color: String,
+    /// Corpos importados ou gerados pelo usuário (a galeria da lib vem embutida na interface).
+    pub avatars: Vec<crate::avatar::AvatarDefinition>,
 }
 impl Default for MascotSettings {
     fn default() -> Self {
         Self { eye_shape: "oval".into(), eye_color: "#FFFFFF".into(), glow: "aurora".into(), glow_color: "#2D5BFF".into(),
-            blink: true, look: true, reactions: true, bounce: true, pace: "calm".into(), in_panel: true, theme: "eyes".into(), hud: "none".into() }
+            blink: true, look: true, reactions: true, bounce: true, pace: "calm".into(), in_panel: true, theme: "eyes".into(), hud: "none".into(),
+            avatar: None, avatar_color: "#FF6A1A".into(), avatars: Vec::new() }
     }
 }
 
@@ -201,6 +207,10 @@ impl AppSettings {
             || !["calm", "lively"].contains(&mascot.pace.as_str()) || !is_hex(&mascot.eye_color) || !is_hex(&mascot.glow_color) || !crate::themes::is_valid_id(&mascot.theme) || !crate::themes::is_valid_id(&mascot.hud) {
             return Err("Opções do mascote inválidas.".into());
         }
+        if !is_hex(&mascot.avatar_color) || mascot.avatars.len() > 24
+            || mascot.avatar.iter().chain(mascot.avatars.iter()).any(|avatar| !crate::avatar::is_valid(avatar)) {
+            return Err("Corpo do mascote inválido.".into());
+        }
         if self.hidden_pages.len() > 20 || self.hidden_pages.iter().any(|page| page.is_empty() || page.len() > 20 || !page.chars().all(|c| c.is_ascii_alphanumeric())) {
             return Err("Páginas ocultas inválidas.".into());
         }
@@ -317,7 +327,7 @@ mod tests {
             "motion": { "reducedMotion": "system" },
             "modules": { "codexUsage": true, "claudeUsage": true, "hideInFullscreen": true, "notifications": false, "systemInfo": true, "media": true, "weather": false },
             "weatherLocation": null,
-            "mascot": { "eyeShape": "oval", "eyeColor": "#FFFFFF", "glow": "aurora", "glowColor": "#2D5BFF", "blink": true, "look": true, "reactions": true, "bounce": true, "pace": "calm", "inPanel": true, "theme": "eyes", "hud": "none" },
+            "mascot": { "eyeShape": "oval", "eyeColor": "#FFFFFF", "glow": "aurora", "glowColor": "#2D5BFF", "blink": true, "look": true, "reactions": true, "bounce": true, "pace": "calm", "inPanel": true, "theme": "eyes", "hud": "none", "avatar": null, "avatarColor": "#FF6A1A", "avatars": [] },
             "sounds": { "enabled": true, "volume": 55, "pack": "soft", "notifications": true, "reminders": true, "sports": true, "interactions": false, "respectDnd": true },
             "hiddenPages": [],
             "pageOrder": []

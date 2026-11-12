@@ -12,6 +12,7 @@ import { noteLine, useUpdate } from "../update/useUpdate";
 const noBridge = { desktop: false } as ShellBridge;
 import { eyeColors, glowNames, glowPresets, optionalPages, orderPages, pageNames, shapes } from "../context/ContextPages";
 import { Mascot } from "../context/Mascot";
+import { AvatarGroup } from "./AvatarGroup";
 import type { NotesControl } from "../context/useNotes";
 import { SNOOZE_MIN, waterSettings } from "../context/waterPlan";
 import { playSound } from "../sound/sounds";
@@ -46,7 +47,7 @@ function Preview({ settings, label, theme }: { settings: Settings; label: string
     ["--preview-edge" as string]: border ? `inset 1.5px 0 0 ${border}, inset -1.5px 0 0 ${border}, inset 0 -1.5px 0 ${border}` : undefined,
   } : {};
   return <div className="set-preview" aria-label={label} role="img" style={{ ["--preview-opacity" as string]: settings.draft.appearance.opacity / 100, ["--glow-a" as string]: glow[0], ["--glow-b" as string]: glow[1], ["--glow-c" as string]: glow[2], ["--accent" as string]: hud?.accent ?? settings.draft.appearance.accentColor, ...hudVars }}>
-    <span className="set-preview-notch"><span className="set-preview-glow" /><time>09:41</time><Mascot expression="normal" image={moodImage("normal", theme.images)} pixelated={theme.pixelated} active={mascot.blink} reducedMotion={false} shape={mascot.eyeShape} color={mascot.eyeColor} blink={mascot.blink} bounce={mascot.bounce} pace={mascot.pace} /><i className="set-preview-dot" /></span>
+    <span className="set-preview-notch"><span className="set-preview-glow" /><time>09:41</time><Mascot expression="normal" image={moodImage("normal", theme.images)} pixelated={theme.pixelated} avatar={mascot.avatar ? { definition: mascot.avatar, color: mascot.avatarColor ?? "#FF6A1A" } : null} active={mascot.blink} reducedMotion={false} shape={mascot.eyeShape} color={mascot.eyeColor} blink={mascot.blink} bounce={mascot.bounce} pace={mascot.pace} /><i className="set-preview-dot" /></span>
   </div>;
 }
 
@@ -174,6 +175,7 @@ export function AppearanceSection({ settings, bridge }: { settings: Settings; br
   return <>
     <Preview settings={settings} label="Prévia do notch" theme={theme} />
     <ThemeGroup bridge={bridge} mascot={mascot.theme ?? "eyes"} hud={mascot.hud ?? "none"} onPick={setMascot} />
+    <AvatarGroup bridge={bridge} mascot={mascot} onPick={setMascot} />
     <Group title="Ilha">
       {hudOwns && <p className="set-desc set-note">O tema escolhido define a cor de destaque e o brilho do notch.</p>}
       <Row title="Opacidade do notch fechado" desc="Quanto do fundo aparece através da ilha compacta. Aplicado ao salvar."><Slider value={appearance.opacity} min={30} max={100} label="Opacidade do notch fechado" onChange={opacity => set({ opacity })} /></Row>
